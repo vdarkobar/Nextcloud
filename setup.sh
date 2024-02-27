@@ -47,6 +47,7 @@ while true; do
     if [[ "$choice" == [yY] ]]; then
 
         # Confirming the start of the script
+        echo
         echo -e "${GREEN}Starting... ${NC}"
         sleep 0.5 # delay for 0.5 second
         break
@@ -154,10 +155,10 @@ cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
      ServerAdmin master@domain.com
      DocumentRoot /var/www/nextcloud/
 
-     ServerName your_domain.com
-     ServerAlias www.your_domain.com
-     ServerAlias 192.168.30.121
-     ServerAlias local_server_domain
+     ServerName DOMAIN_INTERNET
+     ServerAlias WWW_DOMAININTERNET
+     ServerAlias LOCAL_IP
+     ServerAlias HOSTNAME_DOMAIN_LOCAL
 
      <Directory /var/www/nextcloud/>
         Options +FollowSymlinks
@@ -347,7 +348,7 @@ echo
 # Nextcloud Admin User / Password #
 ###################################
 
-echo -e "${GREEN} Set Nextcloud admin user/password... ${NC}"
+echo -e "${GREEN} Setting Nextcloud admin user name/password... ${NC}"
 
 sleep 0.5 # delay for 0.5 seconds
 echo
@@ -502,7 +503,7 @@ else
     echo "File not found."
 fi
 
-# Define paths to the files
+# Define path to the file
 CONFIG_FILE="/var/www/nextcloud/config/config.php"
 
 # Backup original config file
@@ -520,4 +521,65 @@ $0 ~ start {skip=1; system("cat " file)}
 $0 ~ end && skip {skip=0; next} 
 !skip' "$CONFIG_FILE.bak" | sudo tee "$CONFIG_FILE" > /dev/null
 
+echo
+sleep 0.5 # delay for 0.5 seconds
 echo "The config.php file has been updated."
+
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Define path to the file
+APACHE_CONFIG_FILE="/etc/apache2/sites-available/nextcloud.conf"
+
+# Check if the Apache configuration file exists
+if [ ! -f "$APACHE_CONFIG_FILE" ]; then
+    echo "Error: Apache configuration file does not exist at $APACHE_CONFIG_FILE"
+    exit 1
+fi
+
+# Function to perform sed replacement safely
+safe_sed_replace() {
+    local pattern=$1
+    local replacement=$2
+    local file=$3
+
+    # Attempt the replacement
+    if ! sudo sed -i "s/$pattern/$replacement/g" "$file"; then
+        echo "An error occurred trying to replace '$pattern' in $file"
+        exit 1
+    fi
+}
+
+# Replace placeholders in Apache configuration file
+safe_sed_replace "DOMAIN_INTERNET" "$DOMAIN_INTERNET" "$APACHE_CONFIG_FILE"
+safe_sed_replace "WWW_DOMAININTERNET" "www.$DOMAIN_INTERNET" "$APACHE_CONFIG_FILE"
+safe_sed_replace "LOCAL_IP" "$LOCAL_IP" "$APACHE_CONFIG_FILE"
+safe_sed_replace "HOSTNAME_DOMAIN_LOCAL" "$HOSTNAME_DOMAIN_LOCAL" "$APACHE_CONFIG_FILE"
+
+echo
+echo "Apache configuration updated successfully."
+sudo systemctl reload apache2
+echo
+
+
+##########################
+# Prompt user for reboot #
+##########################
+while true; do
+    read -p "Do you want to reboot the server now (recommended)? (yes/no): " response
+    case "${response,,}" in
+        yes|y) echo; echo -e "${GREEN}Rebooting the server...${NC}"; sudo reboot; break ;;
+        no|n) echo -e "${RED}Reboot cancelled.${NC}"; exit 0 ;;
+        *) echo -e "${YELLOW}Invalid response. Please answer${NC} yes or no." ;;
+    esac
+done
+
+
+########################################
+# Remove Script(s) from the system #
+########################################
+echo
+echo -e "${RED}This Script Will Self Destruct!${NC}"
+echo
+# VERY LAST LINE OF THE SCRIPT:
+sudo rm -f "$0" 
