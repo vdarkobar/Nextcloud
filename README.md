@@ -15,12 +15,9 @@ Clone <a href="https://github.com/vdarkobar/DebianTemplate/blob/main/README.md#d
 clear
 sudo apt -y install git && \
 RED='\033[0;31m'; NC='\033[0m'; echo -ne "${RED}Enter directory name: ${NC}"; read NAME; mkdir -p "$NAME"; \
-cd "$NAME" && git clone https://github.com/vdarkobar/unbound.git . && \
-chmod +x pihole-install.sh && \
+cd "$NAME" && git clone https://github.com/vdarkobar/Nextcloud.git . && \
 chmod +x setup.sh && \
-rm config-explained && \
 rm README.md && \
-rm steps.md && \
 ./setup.sh
 ```
 
