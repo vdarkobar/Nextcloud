@@ -2,10 +2,72 @@
 
 sudo hwclock --hctosys
 
-#################################
-#
-#################################
+clear
 
+##############################################################
+# Define ANSI escape sequence for green, red and yellow font #
+##############################################################
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+
+
+########################################################
+# Define ANSI escape sequence to reset font to default #
+########################################################
+NC='\033[0m'
+
+
+#################
+# Intro message #
+#################
+echo
+echo -e "${GREEN} This script will install and configure latest Nextcloud and it's prerequisites, ${NC}"
+echo -e "${GREEN} Apache HTTP Server, PHP 8.3, MariaDB ${NC}"
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+echo -e "${GREEN} You'll be asked to enter: ${NC}"
+echo -e "${GREEN} - User name and Password for Nextcloud admin user ${NC}"
+echo -e "${GREEN} - (Subdomain) Domain name for accessing Nextcloud instance outside your network. ${NC}"
+echo
+echo -e "${GREEN} ... ${NC}"
+echo
+
+
+#######################################
+# Prompt user to confirm script start #
+#######################################
+while true; do
+    echo -e "${GREEN}Start installation and configuration? (y/n) ${NC}"
+    read choice
+
+    # Check if user entered "y" or "Y"
+    if [[ "$choice" == [yY] ]]; then
+
+        # Confirming the start of the script
+        echo -e "${GREEN}Starting... ${NC}"
+        sleep 0.5 # delay for 0.5 second
+        break
+
+    # If user entered "n" or "N", exit the script
+    elif [[ "$choice" == [nN] ]]; then
+        echo -e "${RED}Aborting script. ${NC}"
+        exit
+
+    # If user entered anything else, ask them to correct it
+    else
+        echo -e "${YELLOW}Invalid input. Please enter${NC} 'y' or 'n' "
+    fi
+done
+
+
+######################
+# Database passwords #
+######################
+
+echo
 echo "Creating database passwords and securing them"
 sleep 0.5 # delay for 0.5 seconds
 echo
@@ -53,24 +115,31 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Operation completed successfully."
+
 sleep 0.5 # delay for 0.5 seconds
 echo
 
-#################################
-#
-#################################
 
-echo -e "${GREEN} ######################## ${NC}"
-sleep 0.5 # delay for 0.5 seconds
+###################
+# Updating system #
+###################
+
+echo -e "${GREEN} Updating packages... ${NC}"
 echo
 
 # Update and upgrade packages
 sudo apt update && sudo apt upgrade -y
 
+sleep 0.5 # delay for 0.5 seconds
+echo
 
-#################################
-# domain name??
-#################################
+
+######################
+# Apache HTTP Server #
+######################
+
+echo -e "${GREEN} Installing Apache... ${NC}"
+echo
 
 # Install Apache2
 sudo apt install apache2 p7zip-full -y
@@ -106,19 +175,24 @@ cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
 </VirtualHost>
 EOF
 
+echo
+echo -e "${GREEN} Enabling Nextcloud site and Apache modules... ${NC}"
+echo
+
 # Enable the site and required Apache modules
 sudo a2ensite nextcloud.conf
 sudo a2enmod rewrite headers env dir mime
 
 # Restart Apache to apply changes
 sudo service apache2 restart
+echo
 
 
-#################################
-# Install PHP 8.3 and necessary PHP modules
-#################################
+#############################################
+# Install PHP 8.3 and necessary PHP modules #
+#############################################
 
-echo -e "${GREEN} ######################## ${NC}"
+echo -e "${GREEN} Install PHP 8.3 and necessary PHP modules... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -167,14 +241,15 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "PHP 8.3 and required packages have been installed successfully."
-
-#################################
-#
-#################################
-
-echo -e "${GREEN} ######################## ${NC}"
-sleep 0.5 # delay for 0.5 seconds
 echo
+
+
+####################
+# Configuring PHP #
+###################
+
+echo -e "${GREEN} Configuring PHP... ${NC}"
+sleep 0.5 # delay for 0.5 seconds
 
 # Path to php.ini
 PHP_INI="/etc/php/8.3/apache2/php.ini"
@@ -206,16 +281,14 @@ sudo sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=1/' "$PHP_INI
 # Restart web server
 #sudo systemctl reload apache2
 sudo systemctl restart apache2
-
-echo -e "${GREEN} ######################## ${NC}"
-sleep 0.5 # delay for 0.5 seconds
 echo
 
-#################################
-#
-#################################
 
-echo -e "${GREEN} ######################## ${NC}"
+###################
+# Install MariaDB #
+###################
+
+echo -e "${GREEN} Installing and configuring MariaDB...  ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -236,13 +309,14 @@ mysql -u root -p"$ROOT_DB_PASSWORD" -e "CREATE DATABASE nextcloud CHARACTER SET 
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "CREATE USER 'nextclouduser'@'localhost' IDENTIFIED BY '$NEXTCLOUD_DB_PASSWORD';"
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextclouduser'@'localhost';"
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "FLUSH PRIVILEGES;"
+echo
 
 
-#################################
-#
-#################################
+#############
+# Nextcloud #
+#############
 
-echo -e "${GREEN} ######################## ${NC}"
+echo -e "${GREEN} Fetching latest Nextcloud release... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -252,24 +326,31 @@ cd /tmp && wget https://download.nextcloud.com/server/releases/latest.zip
 7z x latest.zip
 #unzip latest.zip > /dev/null
 sudo mv nextcloud /var/www/
+echo
 
 
 ####################
 # Prepare firewall #
 ####################
-echo
-echo -e "${GREEN} Preparing firewall ${NC}"
+
+echo -e "${GREEN} Preparing firewall for local access...${NC}"
 
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 sudo ufw allow 80/tcp comment "Nextcloud Local Access"
 sudo systemctl restart ufw
+echo
 
 
-#################################
-#       save user name/pass ???
-#################################
+###################################
+# Nextcloud Admin User / Password #
+###################################
+
+echo -e "${GREEN} Set Nextcloud admin user/password... ${NC}"
+
+sleep 0.5 # delay for 0.5 seconds
+echo
 
 # Initialize variables
 NEXTCLOUD_ADMIN_USER=""
@@ -296,13 +377,14 @@ ask_admin_password() {
 # Call functions to get user input
 ask_admin_user
 ask_admin_password
+echo
 
 
-#################################
-#
-#################################
+############################
+# Data folder / Premission #
+############################
 
-echo -e "${GREEN} Creating data folder ${NC}"
+echo -e "${GREEN} Creating data folder and setting premissions... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -314,11 +396,11 @@ sudo chown -R www-data:www-data /var/www/nextcloud/
 sudo chmod -R 755 /var/www/nextcloud/
 
 
-#################################
-#
-#################################
+#######################
+# Installing Nexcloud #
+#######################
 
-echo -e "${GREEN} Installing Nexcloud... ${NC}"
+echo -e "${GREEN} Installing Nexcloud and configuring admin user... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -326,12 +408,15 @@ echo
 sudo -u www-data php /var/www/nextcloud/occ maintenance:install --database "mysql" --database-name "nextcloud" --database-user "nextclouduser" --database-pass "$NEXTCLOUD_DB_PASSWORD" --admin-user "$NEXTCLOUD_ADMIN_USER" --admin-pass "$NEXTCLOUD_ADMIN_PASSWORD" --data-dir "$NEXTCLOUD_DATA_DIR"
 
 sleep 01 # delay for 1 seconds
+echo
 
-#################################
-#
-#################################
 
-# Create or overwrite the tmp.config.php file, using sudo for permissions
+###################
+# Trusted domains #
+###################
+
+echo -e "${GREEN} Setting up Nextcloud Trusted domains... ${NC}"
+sleep 0.5 # delay for 0.5 seconds
 
 # Define the file
 CONFIG_FILE="tmp.config.php"
@@ -391,7 +476,6 @@ done
 
 echo
 echo "Domain name: $DOMAIN_INTERNET"
-echo
 
 # Replace placeholders in the temporary file
 sed -i "s/'LOCAL_IP'/'$LOCAL_IP'/g" "$TEMP_FILE"
@@ -405,12 +489,8 @@ echo
 echo "Trusted Domains are ready for copy in: $CONFIG_FILE"
 echo
 sleep 1 # delay for 1 seconds
-echo -e "${GREEN}Done. ${NC}"
 
-
-#################################
-#                                           radi !!!!!!!!!!!!!
-#################################
+#  radi !!!!!!!!!!!!!
 
 # Search for tmp.config.php in the home directory and assign the path to TMP_FILE
 TMP_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
@@ -441,7 +521,3 @@ $0 ~ end && skip {skip=0; next}
 !skip' "$CONFIG_FILE.bak" | sudo tee "$CONFIG_FILE" > /dev/null
 
 echo "The config.php file has been updated."
-
-
-
-####################################################################################################
