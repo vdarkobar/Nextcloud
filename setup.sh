@@ -402,7 +402,7 @@ sed -i "s/'WWW_DOMAIN_INTERNET'/'www.$DOMAIN_INTERNET'/g" "$TEMP_FILE"
 # Move the temporary file to the final configuration file
 sudo mv "$TEMP_FILE" ~/"$CONFIG_FILE"
 echo
-echo "Trusted Domains are ready: $CONFIG_FILE"
+echo "Trusted Domains are ready for copy in: $CONFIG_FILE"
 echo
 sleep 1 # delay for 1 seconds
 echo -e "${GREEN}Done. ${NC}"
