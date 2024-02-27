@@ -409,18 +409,21 @@ echo -e "${GREEN}Done. ${NC}"
 
 
 #################################
-#
+#                                           radi !!!!!!!!!!!!!
 #################################
+
+# Search for tmp.config.php in the home directory and assign the path to TMP_FILE
+TMP_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
+
+# Check if TMP_FILE is not empty
+if [ ! -z "$TMP_FILE" ]; then
+    echo "File found: $TMP_FILE"
+else
+    echo "File not found."
+fi
 
 # Define paths to the files
 CONFIG_FILE="/var/www/nextcloud/config/config.php"
-TMP_FILE="tmp.config.php"
-
-# Check if the temporary file exists
-if [ ! -f "$TMP_FILE" ]; then
-    echo "Temporary file $TMP_FILE does not exist. Exiting."
-    exit 1
-fi
 
 # Backup original config file
 sudo cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
