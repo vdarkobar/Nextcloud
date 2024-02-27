@@ -10,6 +10,9 @@ self hosted open source cloud file storage and colaboration
 Clone <a href="https://github.com/vdarkobar/DebianTemplate/blob/main/README.md#debian-template">Template</a>, SSH in using <a href="https://github.com/vdarkobar/Home-Cloud/blob/main/shared/Bastion.md#bastion">Bastion Server</a>  
 
   
+Don't forget to add free space to cloned VM:  
+> *VM Name > Hardware > Hard Disk > Disk Action > Resize*  
+  
 ### *Run this command*:
 ```
 clear
