@@ -467,7 +467,7 @@ echo
 
 # Prompt for DOMAIN_INTERNET with error handling for empty input
 while true; do
-    read -p "Please enter Domain Name for your Nextcloud instance: (e.g., domain.com or subdomain.domain.com): " DOMAIN_INTERNET
+    read -p "Please enter Domain Name for external access: (e.g., domain.com or subdomain.domain.com): " DOMAIN_INTERNET
     if [ -z "$DOMAIN_INTERNET" ]; then
         echo "Error: Domain Name cannot be empty. Please try again."
     else
@@ -490,8 +490,6 @@ echo
 echo "Trusted Domains are ready for copy in: $CONFIG_FILE"
 echo
 sleep 1 # delay for 1 seconds
-
-#  radi !!!!!!!!!!!!!
 
 # Search for tmp.config.php in the home directory and assign the path to TMP_FILE
 TMP_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
