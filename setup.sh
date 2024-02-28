@@ -22,15 +22,15 @@ NC='\033[0m'
 # Intro message #
 #################
 echo
-echo -e "${GREEN} This script will install and configure latest Nextcloud and it's prerequisites, ${NC}"
-echo -e "${GREEN} Apache HTTP Server, PHP 8.3, MariaDB ${NC}"
+echo -e "${GREEN} This script will install and configure latest${NC}" Nextcloud server 
+echo -e "${GREEN} and it's prerequisites:${NC} Apache HTTP Server, PHP 8.3 ${GREEN}and${NC} MariaDB" 
 
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 echo -e "${GREEN} You'll be asked to enter: ${NC}"
-echo -e "${GREEN} - User name and Password for Nextcloud admin user ${NC}"
-echo -e "${GREEN} - (Subdomain) Domain name for accessing Nextcloud instance outside your network. ${NC}"
+echo -e "${GREEN} - User name and Password for ${NC} Nextcloud Admin user"
+echo -e "${GREEN} - and for accessing Nextcloud instance outside your local network:${NC} Domain name${GREEN}, optionally:${NC} Subdomain ${NC}"
 echo
 echo -e "${GREEN} ... ${NC}"
 echo
@@ -40,7 +40,7 @@ echo
 # Prompt user to confirm script start #
 #######################################
 while true; do
-    echo -e "${GREEN}Start installation and configuration? (y/n) ${NC}"
+    echo -e "${GREEN}Start installation and configuration?${NC} (y/n)"
     read choice
 
     # Check if user entered "y" or "Y"
@@ -64,58 +64,151 @@ while true; do
 done
 
 
+
+#######################
+# Create backup files #
+#######################
+echo
+echo -e "${GREEN} Creating backup files ${NC}"
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+# Backup the existing /etc/hosts file
+if [ ! -f /etc/hosts.backup ]; then
+    sudo cp /etc/hosts /etc/hosts.backup
+    echo -e "${GREEN}Backup of${NC} /etc/hosts ${GREEN}created.${NC}"
+else
+    echo -e "${YELLOW}Backup of${NC} /etc/hosts ${YELLOW}already exists. Skipping backup.${NC}"
+fi
+
+# Backup original /etc/cloud/cloud.cfg file before modifications
+CLOUD_CFG="/etc/cloud/cloud.cfg"
+if [ ! -f "$CLOUD_CFG.bak" ]; then
+    sudo cp "$CLOUD_CFG" "$CLOUD_CFG.bak"
+    echo -e "${GREEN}Backup of${NC} $CLOUD_CFG ${GREEN}created.${NC}"
+else
+    echo -e "${YELLOW}Backup of${NC} $CLOUD_CFG ${YELLOW}already exists. Skipping backup.${NC}"
+fi
+
+
+#######################
+# Edit cloud.cfg file #
+#######################
+echo
+echo -e "${GREEN} Preventing Cloud-init of rewritining hosts file ${NC}"
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+# Define the file path
+FILE_PATH="/etc/cloud/cloud.cfg"
+
+# Comment out the specified modules
+sudo sed -i '/^\s*- set_hostname/ s/^/#/' "$FILE_PATH"
+sudo sed -i '/^\s*- update_hostname/ s/^/#/' "$FILE_PATH"
+sudo sed -i '/^\s*- update_etc_hosts/ s/^/#/' "$FILE_PATH"
+
+echo -e "${GREEN}Modifications to${NC} $FILE_PATH ${GREEN}applied successfully.${NC}"
+
+
+######################
+# Prepare hosts file #
+######################
+echo
+echo -e "${GREEN} Setting up hosts file ${NC}"
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+# Extract the domain name from /etc/resolv.conf
+DOMAIN_NAME=$(grep '^domain' /etc/resolv.conf | awk '{print $2}')
+
+# Check if DOMAIN_NAME has a value
+if [ -z "$DOMAIN_NAME" ]; then
+    echo -e "${RED}Could not determine the domain name from /etc/resolv.conf. Skipping operations that require the domain name.${NC}"
+else
+    # Continue with operations that require DOMAIN_NAME
+    # Identify the host's primary IP address and hostname
+    HOST_IP=$(hostname -I | awk '{print $1}')
+    HOST_NAME=$(hostname)
+
+    # Skip /etc/hosts update if HOST_IP or HOST_NAME are not determined
+    if [ -z "$HOST_IP" ] || [ -z "$HOST_NAME" ]; then
+        echo -e "${RED}Could not determine the host IP address or hostname. Skipping /etc/hosts update${NC}"
+    else
+        # Display the extracted domain name, host IP, and hostname
+        echo -e "${GREEN}Hostname:${NC} $HOST_NAME"
+        echo -e "${GREEN}Domain name:${NC} $DOMAIN_NAME"
+        echo -e "${GREEN}Host IP:${NC} $HOST_IP"
+
+        # Remove any existing lines with the current hostname in /etc/hosts
+        sudo sed -i "/$HOST_NAME/d" /etc/hosts
+
+        # Prepare the new line in the specified format
+        NEW_LINE="$HOST_IP"$'\t'"$HOST_NAME $HOST_NAME.$DOMAIN_NAME"
+
+        # Insert the new line directly below the 127.0.0.1 localhost line
+        sudo awk -v newline="$NEW_LINE" '/^127.0.0.1 localhost$/ { print; print newline; next }1' /etc/hosts | sudo tee /etc/hosts.tmp > /dev/null && sudo mv /etc/hosts.tmp /etc/hosts
+        echo
+        echo -e "${GREEN}File${NC} /etc/hosts ${GREEN}has been updated.${NC}"
+    fi
+
+    # Continue with any other operations that require DOMAIN_NAME
+fi
+
+
 ######################
 # Database passwords #
 ######################
 
 echo
-echo "Creating database passwords and securing them"
+echo -e "${GREEN}Creating database passwords and securing them ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 # Generate ROOT_DB_PASSWORD
 ROOT_DB_PASSWORD=$(openssl rand -base64 32 | sed 's/[^a-zA-Z0-9]//g')
 if [ $? -ne 0 ]; then
-    echo "Error generating ROOT_DB_PASSWORD."
+    echo -e "${RED}Error generating ROOT_DB_PASSWORD. ${NC}"
     exit 1
 fi
 
 # Save ROOT_DB_PASSWORD
-mkdir -p secrets && echo $ROOT_DB_PASSWORD > secrets/ROOT_DB_PASSWORD.secret
+mkdir -p .secrets && echo $ROOT_DB_PASSWORD > .secrets/ROOT_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
-    echo "Error saving ROOT_DB_PASSWORD."
+    echo -e "${RED}Error saving ROOT_DB_PASSWORD. ${NC}"
     exit 1
 fi
 
 # Generate NEXTCLOUD_DB_PASSWORD
 NEXTCLOUD_DB_PASSWORD=$(openssl rand -base64 32 | sed 's/[^a-zA-Z0-9]//g')
 if [ $? -ne 0 ]; then
-    echo "Error generating NEXTCLOUD_DB_PASSWORD."
+    echo -e "${RED}Error generating NEXTCLOUD_DB_PASSWORD. ${NC}"
     exit 1
 fi
 
 # Save NEXTCLOUD_DB_PASSWORD
-# Fixed typo in variable name in the file path
-mkdir -p secrets && echo $NEXTCLOUD_DB_PASSWORD > secrets/NEXTCLOUD_DB_PASSWORD.secret
+mkdir -p .secrets && echo $NEXTCLOUD_DB_PASSWORD > .secrets/NEXTCLOUD_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
-    echo "Error saving NEXTCLOUD_DB_PASSWORD."
+    echo -e "${RED}Error saving NEXTCLOUD_DB_PASSWORD. ${NC}"
     exit 1
 fi
 
 # Change ownership and permissions
-sudo chown -R root:root secrets/
+sudo chown -R root:root .secrets/
 if [ $? -ne 0 ]; then
-    echo "Error changing ownership of secrets directory."
+    echo -e "${RED}Error changing ownership of secrets directory. ${NC}"
     exit 1
 fi
 
-sudo chmod -R 600 secrets/
+sudo chmod -R 600 .secrets/
 if [ $? -ne 0 ]; then
-    echo "Error changing permissions of secrets directory."
+    echo -e "${RED}Error changing permissions of secrets directory. ${NC}"
     exit 1
 fi
 
-echo "Operation completed successfully."
+echo -e "${GREEN}Operation completed successfully. ${NC}"
 
 sleep 0.5 # delay for 0.5 seconds
 echo
@@ -559,6 +652,40 @@ echo "Apache configuration updated successfully."
 sudo systemctl reload apache2
 echo
 
+echo "Nextcloud customization in progress..."
+echo
+sleep 0.5 # delay for 0.5 second
+
+# Navigate to Nextcloud installation directory
+cd /var/www/nextcloud || { echo "Failed to change directory to /var/www/nextcloud"; exit 1; }
+
+# Function to execute a command and check for errors
+execute_command() {
+    sudo -u www-data php occ "$@" || { echo "Command failed: $*"; exit 1; }
+}
+
+# Install and enable Collabora Online - Built-in CODE Server
+execute_command app:install richdocumentscode
+execute_command app:enable richdocumentscode
+
+# Enable Nextcloud Office App
+execute_command app:enable richdocuments
+echo
+
+# Set default app to Files
+execute_command config:system:set defaultapp --value="files"
+
+# Disable specific apps
+echo
+execute_command app:disable dashboard
+execute_command app:disable firstrunwizard
+execute_command app:disable recommendations
+
+echo
+echo "All commands executed successfully."
+echo
+
+sudo systemctl reload apache2
 
 ##########################
 # Prompt user for reboot #
