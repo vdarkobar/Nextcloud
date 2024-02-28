@@ -293,28 +293,28 @@ echo
 # Install the apt-transport-https package for HTTPS support
 sudo apt install apt-transport-https -y
 if [ $? -ne 0 ]; then
-    echo "Error installing apt-transport-https. Exiting."
+    echo -e "${RED}Error installing apt-transport-https. Exiting.${NC}"
     exit 1
 fi
 
 # Add the GPG key for the Ondřej Surý PHP repository
 sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
 if [ $? -ne 0 ]; then
-    echo "Error downloading the GPG key for PHP repository. Exiting."
+    echo -e "${RED}Error downloading the GPG key for PHP repository. Exiting.${NC}"
     exit 1
 fi
 
 # Add the PHP repository to the sources list
 sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
 if [ $? -ne 0 ]; then
-    echo "Error adding the PHP repository to sources list. Exiting."
+    echo -e "${RED}Error adding the PHP repository to sources list. Exiting.${NC}"
     exit 1
 fi
 
 # Update apt sources
 sudo apt update
 if [ $? -ne 0 ]; then
-    echo "Error updating apt sources. Exiting."
+    echo -e "${RED}Error updating apt sources. Exiting.${NC}"
     exit 1
 fi
 
@@ -330,11 +330,12 @@ ufw \
 php-pear \
 unzip
 if [ $? -ne 0 ]; then
-    echo "Error installing PHP 8.3 and required packages. Exiting."
+    echo -e "${RED}Error installing PHP 8.3 and required packages. Exiting."
     exit 1
 fi
 
-echo "PHP 8.3 and required packages have been installed successfully."
+echo
+echo -e "${GREEN} PHP 8.3 and required packages have been installed successfully.${NC}"
 echo
 
 
@@ -454,7 +455,7 @@ NEXTCLOUD_ADMIN_PASSWORD=""
 ask_admin_user() {
     read -p "Enter Nextcloud admin user: " NEXTCLOUD_ADMIN_USER
     if [[ -z "$NEXTCLOUD_ADMIN_USER" ]]; then
-        echo "The admin user cannot be empty. Please enter a valid user."
+        echo -e "${YELLOW}The admin user cannot be empty. Please enter a valid user.${NC}"
         ask_admin_user
     fi
 }
@@ -463,7 +464,7 @@ ask_admin_user() {
 ask_admin_password() {
     read -p "Enter Nextcloud admin password: " NEXTCLOUD_ADMIN_PASSWORD
     if [[ -z "$NEXTCLOUD_ADMIN_PASSWORD" ]]; then
-        echo "The admin password cannot be empty. Please enter a valid password."
+        echo -e "${YELLOW}The admin password cannot be empty. Please enter a valid password.${NC}"
         ask_admin_password
     fi
 }
@@ -516,7 +517,7 @@ sleep 0.5 # delay for 0.5 seconds
 CONFIG_FILE="tmp.config.php"
 
 echo
-echo -e "${GREEN}Creating file:${NC} $CONFIG_FILE"
+echo -e "${GREEN} Creating file:${NC} $CONFIG_FILE"
 
 # Temporary file to hold intermediate results
 TEMP_FILE="$(mktemp)"
@@ -551,25 +552,25 @@ fi
 
 # Display the variable values for verification
 echo
-echo "Configuration file created: $CONFIG_FILE"
-echo "Local IP: $LOCAL_IP"
-echo "Hostname: $HOSTNAME"
-echo "Local Domain: $DOMAIN_LOCAL"
-echo "Local Hostname and Domain Name: $HOSTNAME_DOMAIN_LOCAL"
+echo -e "${GREEN} Configuration file created:${NC} $CONFIG_FILE"
+echo -e "${GREEN} Local IP:${NC} $LOCAL_IP"
+echo -e "${GREEN} Hostname:${NC} $HOSTNAME"
+echo -e "${GREEN} Local Domain:${NC} $DOMAIN_LOCAL"
+echo -e "${GREEN} Local Hostname and Domain Name:${NC} $HOSTNAME_DOMAIN_LOCAL"
 echo
 
 # Prompt for DOMAIN_INTERNET with error handling for empty input
 while true; do
     read -p "Please enter Domain Name for external access: (e.g., domain.com or subdomain.domain.com): " DOMAIN_INTERNET
     if [ -z "$DOMAIN_INTERNET" ]; then
-        echo "Error: Domain Name cannot be empty. Please try again."
+        echo -e "${RED}Error: Domain Name cannot be empty. Please try again.${NC}"
     else
         break
     fi
 done
 
 echo
-echo "Domain name: $DOMAIN_INTERNET"
+echo -e "${GREEN} Domain name:${NC} $DOMAIN_INTERNET"
 
 # Replace placeholders in the temporary file
 sed -i "s/'LOCAL_IP'/'$LOCAL_IP'/g" "$TEMP_FILE"
@@ -580,7 +581,7 @@ sed -i "s/'WWW_DOMAIN_INTERNET'/'www.$DOMAIN_INTERNET'/g" "$TEMP_FILE"
 # Move the temporary file to the final configuration file
 sudo mv "$TEMP_FILE" ~/"$CONFIG_FILE"
 echo
-echo "Trusted Domains are ready for copy in: $CONFIG_FILE"
+echo -e "${GREEN}Trusted Domains are ready for copy in:${NC} $CONFIG_FILE"
 echo
 sleep 1 # delay for 1 seconds
 
@@ -591,7 +592,7 @@ TMP_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
 if [ ! -z "$TMP_FILE" ]; then
     echo "File found: $TMP_FILE"
 else
-    echo "File not found."
+    echo -e "${RED}File not found."
 fi
 
 # Define path to the file
@@ -614,7 +615,7 @@ $0 ~ end && skip {skip=0; next}
 
 echo
 sleep 0.5 # delay for 0.5 seconds
-echo "The config.php file has been updated."
+echo -e "${GREEN} The${NC} config.php ${GREEN}file has been updated. ${NC}"
 
 # Exit immediately if a command exits with a non-zero status.
 set -e
@@ -624,7 +625,7 @@ APACHE_CONFIG_FILE="/etc/apache2/sites-available/nextcloud.conf"
 
 # Check if the Apache configuration file exists
 if [ ! -f "$APACHE_CONFIG_FILE" ]; then
-    echo "Error: Apache configuration file does not exist at $APACHE_CONFIG_FILE"
+    echo -e "${RED}Error: Apache configuration file does not exist at${NC} $APACHE_CONFIG_FILE"
     exit 1
 fi
 
@@ -636,7 +637,7 @@ safe_sed_replace() {
 
     # Attempt the replacement
     if ! sudo sed -i "s/$pattern/$replacement/g" "$file"; then
-        echo "An error occurred trying to replace '$pattern' in $file"
+        echo -e "${RED}An error occurred trying to replace${NC} '$pattern' ${RED}in${NC} $file"
         exit 1
     fi
 }
@@ -648,11 +649,11 @@ safe_sed_replace "LOCAL_IP" "$LOCAL_IP" "$APACHE_CONFIG_FILE"
 safe_sed_replace "HOSTNAME_DOMAIN_LOCAL" "$HOSTNAME_DOMAIN_LOCAL" "$APACHE_CONFIG_FILE"
 
 echo
-echo "Apache configuration updated successfully."
+echo -e "${GREEN} Apache configuration updated successfully. ${NC}"
 sudo systemctl reload apache2
 echo
 
-echo "Nextcloud customization in progress..."
+echo -e "${GREEN} Nextcloud customization in progress... ${NC}"
 echo
 sleep 0.5 # delay for 0.5 second
 
@@ -682,10 +683,35 @@ execute_command app:disable firstrunwizard
 execute_command app:disable recommendations
 
 echo
-echo "All commands executed successfully."
+echo -e "${GREEN} All commands executed successfully. ${NC}"
 echo
 
 sudo systemctl reload apache2
+
+
+######################
+# Info before reboot #
+######################
+HOST_IP=$(hostname -I | awk '{print $1}')
+HOST_NAME=$(hostname --short)
+DOMAIN_NAME=$(grep '^domain' /etc/resolv.conf | awk '{print $2}')
+
+echo -e "${GREEN}REMEMBER: ${NC}"
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+echo
+echo -e "${GREEN} You can find your${NC} Nexcloud server ${GREEN}instance at: ${NC}"
+echo
+echo -e " - http://$HOST_IP"
+echo -e " - http://$HOSTNAME_DOMAIN_LOCAL"
+echo
+echo -e "${GREEN} If you have configured external access, at: ${NC}"
+echo
+echo -e " - $DOMAIN_INTERNET"
+echo -e " - www.$DOMAIN_INTERNET"
+echo
+
 
 ##########################
 # Prompt user for reboot #
