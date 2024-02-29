@@ -264,6 +264,10 @@ cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
         SetEnv HTTP_HOME /var/www/nextcloud
      </Directory>
 
+    <IfModule mod_headers.c>
+        Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains"
+    </IfModule>
+
      ErrorLog \${APACHE_LOG_DIR}/error.log
      CustomLog \${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>
