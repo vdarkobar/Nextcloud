@@ -7,6 +7,7 @@ clear
 ##############################################################
 # Define ANSI escape sequence for green, red and yellow font #
 ##############################################################
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[0;33m'
@@ -15,22 +16,24 @@ YELLOW='\033[0;33m'
 ########################################################
 # Define ANSI escape sequence to reset font to default #
 ########################################################
+
 NC='\033[0m'
 
 
 #################
 # Intro message #
 #################
+
 echo
 echo -e "${GREEN} This script will install and configure latest${NC}" Nextcloud server 
-echo -e "${GREEN} and it's prerequisites:${NC} Apache HTTP Server, PHP 8.3 ${GREEN}and${NC} MariaDB" 
+echo -e "${GREEN} and it's prerequisites:${NC} Apache HTTP Server, PHP 8.3, Redis ${GREEN}and${NC} MariaDB" 
 
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 echo -e "${GREEN} You'll be asked to enter: ${NC}"
 echo -e "${GREEN} - User name and Password for ${NC} Nextcloud Admin user"
-echo -e "${GREEN} - and for accessing Nextcloud instance outside your local network:${NC} Domain name${GREEN}, optionally:${NC} Subdomain ${NC}"
+echo -e "${GREEN} - for accessing Nextcloud instance outside your local network:${NC} Domain name${GREEN}, optionally:${NC} Subdomain ${NC}"
 echo
 echo -e "${GREEN} ... ${NC}"
 echo
@@ -39,8 +42,10 @@ echo
 #######################################
 # Prompt user to confirm script start #
 #######################################
+
 while true; do
     echo -e "${GREEN}Start installation and configuration?${NC} (y/n)"
+    echo
     read choice
 
     # Check if user entered "y" or "Y"
@@ -68,6 +73,7 @@ done
 #######################
 # Create backup files #
 #######################
+
 echo
 echo -e "${GREEN} Creating backup files ${NC}"
 
@@ -95,66 +101,77 @@ fi
 #######################
 # Edit cloud.cfg file #
 #######################
-echo
-echo -e "${GREEN} Preventing Cloud-init of rewritining hosts file ${NC}"
 
+echo
+echo -e "${GREEN}Preventing Cloud-init from rewriting hosts file${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 # Define the file path
 FILE_PATH="/etc/cloud/cloud.cfg"
+BACKUP_PATH="${FILE_PATH}.bak"
 
-# Comment out the specified modules
-sudo sed -i '/^\s*- set_hostname/ s/^/#/' "$FILE_PATH"
-sudo sed -i '/^\s*- update_hostname/ s/^/#/' "$FILE_PATH"
-sudo sed -i '/^\s*- update_etc_hosts/ s/^/#/' "$FILE_PATH"
+# Create a backup of the original file
+sudo cp "$FILE_PATH" "$BACKUP_PATH"
 
-echo -e "${GREEN}Modifications to${NC} $FILE_PATH ${GREEN}applied successfully.${NC}"
+# Comment out the specified modules and check for errors
+if sudo sed -i '/^\s*- set_hostname/ s/^/#/' "$FILE_PATH" && \
+   sudo sed -i '/^\s*- update_hostname/ s/^/#/' "$FILE_PATH" && \
+   sudo sed -i '/^\s*- update_etc_hosts/ s/^/#/' "$FILE_PATH"; then
+   echo -e "${GREEN}Modifications to${NC} $FILE_PATH ${GREEN}applied successfully.${NC}"
+else
+    # Restore from backup in case of error
+    echo -e "${RED}An error occurred. Restoring backup...${NC}"
+    sudo cp "$BACKUP_PATH" "$FILE_PATH"
+    echo -e "${RED}Backup restored. Please check the cloud.cfg file manually.${NC}"
+    exit 1
+fi
 
 
 ######################
 # Prepare hosts file #
 ######################
-echo
-echo -e "${GREEN} Setting up hosts file ${NC}"
 
+echo
+echo -e "${GREEN}Setting up hosts file${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 # Extract the domain name from /etc/resolv.conf
 DOMAIN_NAME=$(grep '^domain' /etc/resolv.conf | awk '{print $2}')
 
-# Check if DOMAIN_NAME has a value
 if [ -z "$DOMAIN_NAME" ]; then
     echo -e "${RED}Could not determine the domain name from /etc/resolv.conf. Skipping operations that require the domain name.${NC}"
 else
-    # Continue with operations that require DOMAIN_NAME
     # Identify the host's primary IP address and hostname
     HOST_IP=$(hostname -I | awk '{print $1}')
     HOST_NAME=$(hostname)
 
-    # Skip /etc/hosts update if HOST_IP or HOST_NAME are not determined
     if [ -z "$HOST_IP" ] || [ -z "$HOST_NAME" ]; then
-        echo -e "${RED}Could not determine the host IP address or hostname. Skipping /etc/hosts update${NC}"
+        echo -e "${RED}Could not determine the host IP address or hostname. Skipping /etc/hosts update.${NC}"
     else
         # Display the extracted domain name, host IP, and hostname
         echo -e "${GREEN}Hostname:${NC} $HOST_NAME"
         echo -e "${GREEN}Domain name:${NC} $DOMAIN_NAME"
         echo -e "${GREEN}Host IP:${NC} $HOST_IP"
 
-        # Remove any existing lines with the current hostname in /etc/hosts
-        sudo sed -i "/$HOST_NAME/d" /etc/hosts
-
-        # Prepare the new line in the specified format
-        NEW_LINE="$HOST_IP"$'\t'"$HOST_NAME $HOST_NAME.$DOMAIN_NAME"
-
-        # Insert the new line directly below the 127.0.0.1 localhost line
-        sudo awk -v newline="$NEW_LINE" '/^127.0.0.1 localhost$/ { print; print newline; next }1' /etc/hosts | sudo tee /etc/hosts.tmp > /dev/null && sudo mv /etc/hosts.tmp /etc/hosts
-        echo
-        echo -e "${GREEN}File${NC} /etc/hosts ${GREEN}has been updated.${NC}"
+        # Backup /etc/hosts before making changes
+        BACKUP_PATH="/etc/hosts.bak"
+        sudo cp /etc/hosts "$BACKUP_PATH"
+        
+        # Attempt to update /etc/hosts
+        if sudo sed -i "/$HOST_NAME/d" /etc/hosts && \
+           echo "$HOST_IP $HOST_NAME $HOST_NAME.$DOMAIN_NAME" | sudo tee -a /etc/hosts > /dev/null; then
+            echo
+            echo -e "${GREEN}File /etc/hosts has been updated.${NC}"
+        else
+            # Restore from backup in case of error
+            echo -e "${RED}Failed to update /etc/hosts. Restoring from backup...${NC}"
+            sudo cp "$BACKUP_PATH" /etc/hosts
+            echo -e "${RED}Backup restored. Please check /etc/hosts manually.${NC}"
+            exit 1
+        fi
     fi
-
-    # Continue with any other operations that require DOMAIN_NAME
 fi
 
 
@@ -162,8 +179,7 @@ fi
 # Database passwords #
 ######################
 
-echo
-echo -e "${GREEN}Creating database passwords and securing them ${NC}"
+echo -e "${GREEN}Creating database passwords... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -175,7 +191,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Save ROOT_DB_PASSWORD
-mkdir -p .secrets && echo $ROOT_DB_PASSWORD > .secrets/ROOT_DB_PASSWORD.secret
+mkdir -p ~/.secrets && echo $ROOT_DB_PASSWORD > ~/.secrets/ROOT_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving ROOT_DB_PASSWORD. ${NC}"
     exit 1
@@ -189,36 +205,35 @@ if [ $? -ne 0 ]; then
 fi
 
 # Save NEXTCLOUD_DB_PASSWORD
-mkdir -p .secrets && echo $NEXTCLOUD_DB_PASSWORD > .secrets/NEXTCLOUD_DB_PASSWORD.secret
+mkdir -p ~/.secrets && echo $NEXTCLOUD_DB_PASSWORD > ~/.secrets/NEXTCLOUD_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving NEXTCLOUD_DB_PASSWORD. ${NC}"
     exit 1
 fi
 
-# Change ownership and permissions
-sudo chown -R root:root .secrets/
+# Generate REDIS_PASSWORD
+REDIS_PASSWORD=$(openssl rand -base64 32 | sed 's/[^a-zA-Z0-9]//g')
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error changing ownership of secrets directory. ${NC}"
+    echo -e "${RED}Error generating REDIS_PASSWORD. ${NC}"
     exit 1
 fi
 
-sudo chmod -R 600 .secrets/
+# Save REDIS_PASSWORD
+mkdir -p ~/.secrets && echo $REDIS_PASSWORD > .secrets/REDIS_PASSWORD.secret
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error changing permissions of secrets directory. ${NC}"
+    echo -e "${RED}Error saving REDIS_PASSWORD. ${NC}"
     exit 1
 fi
-
-echo -e "${GREEN}Operation completed successfully. ${NC}"
 
 sleep 0.5 # delay for 0.5 seconds
 echo
 
 
-###################
-# Updating system #
-###################
+#############################################
+# Updating system, installing some packages #
+#############################################
 
-echo -e "${GREEN} Updating packages... ${NC}"
+echo -e "${GREEN} Updating packages and upgrading the system... ${NC}"
 echo
 
 # Update and upgrade packages
@@ -227,6 +242,11 @@ sudo apt update && sudo apt upgrade -y
 sleep 0.5 # delay for 0.5 seconds
 echo
 
+echo -e "${GREEN} Installing Redis, p7zip... ${NC}"
+echo
+
+sudo apt install -y redis-server p7zip-full
+echo
 
 ######################
 # Apache HTTP Server #
@@ -236,7 +256,7 @@ echo -e "${GREEN} Installing Apache... ${NC}"
 echo
 
 # Install Apache2
-sudo apt install apache2 p7zip-full -y
+sudo apt install apache2 -y
 
 # Configure Apache2 for Nextcloud
 # first create/edit>move
@@ -329,10 +349,8 @@ libapache2-mod-php8.3 \
 php8.3-{zip,xml,mbstring,gd,curl,imagick,intl,bcmath,gmp,cli,mysql,apcu,redis,smbclient,ldap,bz2,fpm} \
 php-dompdf \
 libmagickcore-6.q16-6-extra \
-redis-server \
-ufw \
-php-pear \
-unzip
+php-pear
+
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error installing PHP 8.3 and required packages. Exiting."
     exit 1
@@ -446,7 +464,7 @@ echo
 # Nextcloud Admin User / Password #
 ###################################
 
-echo -e "${GREEN} Setting Nextcloud admin user name/password... ${NC}"
+echo -e "${GREEN} Setting Nextcloud Admin user name/password... ${NC}"
 
 sleep 0.5 # delay for 0.5 seconds
 echo
@@ -476,7 +494,26 @@ ask_admin_password() {
 # Call functions to get user input
 ask_admin_user
 ask_admin_password
-echo
+
+# Ensure the .secrets directory exists
+mkdir -p ~/.secrets
+
+# Save Admin User Name
+echo "$NEXTCLOUD_ADMIN_USER" > ~/.secrets/NEXTCLOUD_ADMIN_USER.secret
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error saving Admin User Name. ${NC}"
+    exit 1
+fi
+
+# Save Admin Password
+echo "$NEXTCLOUD_ADMIN_PASSWORD" > ~/.secrets/NEXTCLOUD_ADMIN_PASSWORD.secret
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error saving Admin Password. ${NC}"
+    exit 1
+fi
+
+# Ensure the .secrets directory has correct permissions
+chmod 600 ~/.secrets
 
 
 ############################
@@ -594,7 +631,7 @@ TMP_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
 
 # Check if TMP_FILE is not empty
 if [ ! -z "$TMP_FILE" ]; then
-    echo "File found: $TMP_FILE"
+    echo -e "${GREEN}File found:${NC} $TMP_FILE"
 else
     echo -e "${RED}File not found."
 fi
@@ -621,8 +658,7 @@ echo
 sleep 0.5 # delay for 0.5 seconds
 echo -e "${GREEN} The${NC} config.php ${GREEN}file has been updated. ${NC}"
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
+# Configuring Trusted domains in Apache
 
 # Define path to the file
 APACHE_CONFIG_FILE="/etc/apache2/sites-available/nextcloud.conf"
@@ -671,7 +707,7 @@ execute_command() {
 
 # Install and enable Collabora Online - Built-in CODE Server
 execute_command app:install richdocumentscode
-execute_command app:enable richdocumentscode
+#execute_command app:enable richdocumentscode
 
 # Enable Nextcloud Office App
 execute_command app:enable richdocuments
@@ -679,6 +715,7 @@ echo
 
 # Set default app to Files
 execute_command config:system:set defaultapp --value="files"
+execute_command config:system:set maintenance_window_start --type=integer --value=1
 
 # Disable specific apps
 echo
@@ -693,9 +730,159 @@ echo
 sudo systemctl reload apache2
 
 
+######################################
+# Configuring Nextcloud to Use Redis #
+######################################
+
+echo -e "${GREEN} Configuring Nextcloud to Use Redis... ${NC}"
+sleep 0.5 # delay for 0.5 seconds
+
+###
+
+# Define the Redis configuration file and it's backup
+REDISCONFIG_FILE="/etc/redis/redis.conf"
+REDISBACKUP_FILE="/etc/redis/redis.conf.bak"
+
+# Attempt to copy the Redis configuration file to a backup file
+if ! sudo cp "$REDISCONFIG_FILE" "$REDISBACKUP_FILE"; then
+  echo "Error: Failed to copy $REDISCONFIG_FILE to $REDISBACKUP_FILE."
+  exit 1
+fi
+
+echo
+echo "Backup of Redis configuration file created successfully at $REDISBACKUP_FILE"
+echo
+
+# Check if REDIS_PASSWORD is set
+if [ -z "$REDIS_PASSWORD" ]; then
+  echo "Error: Redis password is not set."
+  exit 1
+fi
+
+# Check if the Redis configuration file exists using sudo
+if ! sudo test -f "$REDISCONFIG_FILE"; then
+  echo "Error: Redis configuration file does not exist at $REDISCONFIG_FILE."
+  exit 1
+fi
+
+# Attempt to update the Redis configuration file with the password
+if ! sudo sed -i 's/# requirepass foobared/requirepass '"$REDIS_PASSWORD"'/' "$REDISCONFIG_FILE"; then
+  echo "Error: Failed to update Redis configuration file."
+  exit 1
+fi
+
+echo
+echo "Redis configuration file updated successfully."
+echo
+
+###
+
+# Define temporary configuration file
+CONFIGREDIS_FILE="tmp2.config.php"
+
+echo -e "${GREEN} Creating file:${NC} $CONFIGREDIS_FILE"
+
+# Temporary file to hold intermediate results
+TEMP_FILE="$(mktemp)"
+
+# Write the configuration to a temporary file first
+cat <<EOF > "$TEMP_FILE"
+  'memcache.local' => '\\OC\\Memcache\\Redis',
+  'memcache.locking' => '\\OC\\Memcache\\Redis',
+  'redis' =>
+  array (
+    'host' => 'localhost',
+    'port' => 6379,
+    'password' => 'REDIS_PASSWORD',
+  ),
+EOF
+
+# Replace placeholders in the temporary file
+if ! sed -i "s/'REDIS_PASSWORD'/'$REDIS_PASSWORD'/g" "$TEMP_FILE"; then
+    echo -e "${RED}Error replacing REDIS_PASSWORD in $TEMP_FILE.${NC}"
+    exit 1
+fi
+
+# Move the temporary file to the final configuration file
+if ! sudo mv "$TEMP_FILE" ~/"$CONFIGREDIS_FILE"; then
+    echo -e "${RED}Error moving $TEMP_FILE to $CONFIGREDIS_FILE.${NC}"
+    exit 1
+fi
+
+echo
+echo -e "${GREEN}Redis configuration is ready for copy in:${NC} $CONFIGREDIS_FILE"
+echo
+sleep 1 # delay for 1 seconds
+
+###
+
+# Search for tmp2.config.php in the home directory and assign the path to TMP_FILE
+TMP2_FILE=$(find ~/ -type f -name "tmp2.config.php" 2>/dev/null)
+
+# Check if TMP_FILE is not empty
+if [ ! -z "$TMP2_FILE" ]; then
+    echo "File found: $TMP2_FILE"
+else
+    echo -e "${RED}File not found.${NC}"
+    # Consider whether you want to exit or just skip the next part
+    exit 1 # or continue with a different part of the script
+fi
+
+# Define path to the file
+CONFIG_FILE="/var/www/nextcloud/config/config.php"
+
+# Backup original config file
+if ! sudo cp "$CONFIG_FILE" "$CONFIG_FILE.bak"; then
+    echo -e "${RED}Error backing up $CONFIG_FILE.${NC}"
+    exit 1
+fi
+
+# The pattern to match the line after which the new content will be appended
+START_PATTERN="'maintenance_window_start' => 1,"
+
+# Use awk to append the block from TMP_FILE after START_PATTERN
+if ! sudo awk -v start="$START_PATTERN" -v file="$TMP2_FILE" '
+$0 ~ start {print; while((getline line < file) > 0) {print line}; next}
+{print}' "$CONFIG_FILE.bak" | sudo tee "$CONFIG_FILE" > /dev/null; then
+    echo -e "${RED}Error updating $CONFIG_FILE with $TMP2_FILE content.${NC}"
+    exit 1
+fi
+
+echo
+sleep 0.5 # delay for 0.5 seconds
+echo -e "${GREEN}The config.php file has been updated.${NC}"
+echo
+
+
+###########################
+# Securing sensitive data #
+###########################
+
+echo -e "${GREEN} Securing sensitive data... ${NC}"
+echo
+sleep 0.5 # delay for 0.5 seconds
+
+# Change ownership and permissions
+sudo chown -R root:root ~/.secrets/
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error changing ownership of secrets directory. ${NC}"
+    exit 1
+fi
+
+sudo chmod -R 600 ~/.secrets/
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error changing permissions of secrets directory. ${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN} Operation completed successfully. ${NC}"
+echo
+
+
 ######################
 # Info before reboot #
 ######################
+
 HOST_IP=$(hostname -I | awk '{print $1}')
 HOST_NAME=$(hostname --short)
 DOMAIN_NAME=$(grep '^domain' /etc/resolv.conf | awk '{print $2}')
@@ -720,6 +907,7 @@ echo
 ##########################
 # Prompt user for reboot #
 ##########################
+
 while true; do
     read -p "Do you want to reboot the server now (recommended)? (yes/no): " response
     case "${response,,}" in
