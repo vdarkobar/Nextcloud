@@ -902,7 +902,8 @@ echo
 echo -e " - $DOMAIN_INTERNET"
 echo -e " - www.$DOMAIN_INTERNET"
 echo
-
+echo -e "${GREEN} Sensitive data will be stored in${NC} .secrets ${GREEN}folder ${NC}"
+echo
 
 ##########################
 # Prompt user for reboot #
