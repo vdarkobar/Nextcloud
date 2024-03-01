@@ -1,8 +1,11 @@
 #!/bin/bash
-
-sudo hwclock --hctosys
-
 clear
+
+echo
+sudo hwclock --show
+echo
+sudo timedatectl status
+sleep 0.5 # delay for 0.5 seconds
 
 ##############################################################
 # Define ANSI escape sequence for green, red and yellow font #
@@ -68,6 +71,13 @@ while true; do
     fi
 done
 
+
+################################
+# Setting up working directory #
+################################
+
+# setting variable for later use
+WORKING_DIRECTORY=$(pwd)
 
 
 #######################
@@ -191,7 +201,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Save ROOT_DB_PASSWORD
-mkdir -p ~/.secrets && echo $ROOT_DB_PASSWORD > ~/.secrets/ROOT_DB_PASSWORD.secret
+mkdir -p $WORKING_DIRECTORY/.secrets && echo $ROOT_DB_PASSWORD > $WORKING_DIRECTORY/.secrets/ROOT_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving ROOT_DB_PASSWORD. ${NC}"
     exit 1
@@ -205,7 +215,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Save NEXTCLOUD_DB_PASSWORD
-mkdir -p ~/.secrets && echo $NEXTCLOUD_DB_PASSWORD > ~/.secrets/NEXTCLOUD_DB_PASSWORD.secret
+mkdir -p $WORKING_DIRECTORY/.secrets && echo $NEXTCLOUD_DB_PASSWORD > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving NEXTCLOUD_DB_PASSWORD. ${NC}"
     exit 1
@@ -219,7 +229,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Save REDIS_PASSWORD
-mkdir -p ~/.secrets && echo $REDIS_PASSWORD > .secrets/REDIS_PASSWORD.secret
+mkdir -p $WORKING_DIRECTORY/.secrets && echo $REDIS_PASSWORD > $WORKING_DIRECTORY/.secrets/REDIS_PASSWORD.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving REDIS_PASSWORD. ${NC}"
     exit 1
@@ -343,16 +353,14 @@ if [ $? -ne 0 ]; then
 fi
 
 # Install PHP 8.3 and required packages
-sudo apt install -y \
+if ! sudo apt install -y \
 php8.3 \
 libapache2-mod-php8.3 \
 php8.3-{zip,xml,mbstring,gd,curl,imagick,intl,bcmath,gmp,cli,mysql,apcu,redis,smbclient,ldap,bz2,fpm} \
 php-dompdf \
 libmagickcore-6.q16-6-extra \
-php-pear
-
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error installing PHP 8.3 and required packages. Exiting."
+php-pear; then
+    echo -e "${RED}Error installing PHP 8.3 and required packages. Exiting.${NC}"
     exit 1
 fi
 
@@ -496,25 +504,25 @@ ask_admin_user
 ask_admin_password
 
 # Ensure the .secrets directory exists
-mkdir -p ~/.secrets
+mkdir -p $WORKING_DIRECTORY/.secrets
 
 # Save Admin User Name
-echo "$NEXTCLOUD_ADMIN_USER" > ~/.secrets/NEXTCLOUD_ADMIN_USER.secret
+echo "$NEXTCLOUD_ADMIN_USER" > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_ADMIN_USER.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving Admin User Name. ${NC}"
     exit 1
 fi
 
 # Save Admin Password
-echo "$NEXTCLOUD_ADMIN_PASSWORD" > ~/.secrets/NEXTCLOUD_ADMIN_PASSWORD.secret
+echo "$NEXTCLOUD_ADMIN_PASSWORD" > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_ADMIN_PASSWORD.secret
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error saving Admin Password. ${NC}"
     exit 1
 fi
 
 # Ensure the .secrets directory has correct permissions
-chmod 600 ~/.secrets
-
+chmod 600 $WORKING_DIRECTORY/.secrets
+echo
 
 ############################
 # Data folder / Premission #
@@ -620,7 +628,7 @@ sed -i "s/'DOMAIN_INTERNET'/'$DOMAIN_INTERNET'/g" "$TEMP_FILE"
 sed -i "s/'WWW_DOMAIN_INTERNET'/'www.$DOMAIN_INTERNET'/g" "$TEMP_FILE"
 
 # Move the temporary file to the final configuration file
-sudo mv "$TEMP_FILE" ~/"$CONFIG_FILE"
+sudo mv "$TEMP_FILE" $WORKING_DIRECTORY/"$CONFIG_FILE"
 echo
 echo -e "${GREEN}Trusted Domains are ready for copy in:${NC} $CONFIG_FILE"
 echo
@@ -804,7 +812,7 @@ if ! sed -i "s/'REDIS_PASSWORD'/'$REDIS_PASSWORD'/g" "$TEMP_FILE"; then
 fi
 
 # Move the temporary file to the final configuration file
-if ! sudo mv "$TEMP_FILE" ~/"$CONFIGREDIS_FILE"; then
+if ! sudo mv "$TEMP_FILE" $WORKING_DIRECTORY/"$CONFIGREDIS_FILE"; then
     echo -e "${RED}Error moving $TEMP_FILE to $CONFIGREDIS_FILE.${NC}"
     exit 1
 fi
@@ -863,14 +871,12 @@ echo
 sleep 0.5 # delay for 0.5 seconds
 
 # Change ownership and permissions
-sudo chown -R root:root ~/.secrets/
-if [ $? -ne 0 ]; then
+if ! sudo chown -R root:root $WORKING_DIRECTORY/.secrets/; then
     echo -e "${RED}Error changing ownership of secrets directory. ${NC}"
     exit 1
 fi
 
-sudo chmod -R 600 ~/.secrets/
-if [ $? -ne 0 ]; then
+if ! sudo chmod -R 600 $WORKING_DIRECTORY/.secrets/; then
     echo -e "${RED}Error changing permissions of secrets directory. ${NC}"
     exit 1
 fi
@@ -902,7 +908,7 @@ echo
 echo -e " - $DOMAIN_INTERNET"
 echo -e " - www.$DOMAIN_INTERNET"
 echo
-echo -e "${GREEN} Sensitive data will be stored in${NC} .secrets ${GREEN}folder ${NC}"
+echo -e "${GREEN} Sensitive data will be stored in${NC} .secrets ${GREEN}folder${NC}"
 echo
 
 ##########################
