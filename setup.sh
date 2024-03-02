@@ -1,8 +1,6 @@
 #!/bin/bash
-clear
 
-echo
-sudo hwclock --show
+clear
 echo
 sudo timedatectl status
 sleep 0.5 # delay for 0.5 seconds
@@ -76,7 +74,7 @@ done
 # Setting up working directory #
 ################################
 
-# setting variable for later use
+# Setting variable for later use
 WORKING_DIRECTORY=$(pwd)
 
 
@@ -269,37 +267,48 @@ echo
 sudo apt install apache2 -y
 
 # Configure Apache2 for Nextcloud
-# first create/edit>move
-#cat <<EOF | sudo tee nextcloud.conf ...
-
-# Configure Apache2 for Nextcloud
 cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
 <VirtualHost *:80>
-     ServerAdmin master@domain.com
-     DocumentRoot /var/www/nextcloud/
+        ServerName LOCAL_DOMAIN
+        ServerAlias LOCAL_IP
+        ServerAlias DOMAIN_INTERNET
+        ServerAlias www.DOMAIN_INTERNET
 
-     ServerName DOMAIN_INTERNET
-     ServerAlias WWW_DOMAININTERNET
-     ServerAlias LOCAL_IP
-     ServerAlias HOSTNAME_DOMAIN_LOCAL
+        Redirect permanent / https://LOCAL_DOMAIN
 
-     <Directory /var/www/nextcloud/>
-        Options +FollowSymlinks
-        AllowOverride All
-        Require all granted
-          <IfModule mod_dav.c>
-            Dav off
-          </IfModule>
-        SetEnv HOME /var/www/nextcloud
-        SetEnv HTTP_HOME /var/www/nextcloud
-     </Directory>
+</VirtualHost>
 
-    <IfModule mod_headers.c>
-        Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains"
-    </IfModule>
+<VirtualHost *:443>
+        ServerAdmin webmaster@localhost
+        DocumentRoot /var/www/nextcloud
 
-     ErrorLog \${APACHE_LOG_DIR}/error.log
-     CustomLog \${APACHE_LOG_DIR}/access.log combined
+        ServerName DOMAIN_INTERNET
+        ServerAlias www.DOMAIN_INTERNET
+        ServerAlias LOCAL_IP
+        ServerAlias LOCAL_DOMAIN
+
+        <Directory /var/www/nextcloud/>
+            Options +FollowSymlinks
+            AllowOverride All
+            Require all granted
+            <IfModule mod_dav.c>
+                Dav off
+            </IfModule>
+            SetEnv HOME /var/www/nextcloud
+            SetEnv HTTP_HOME /var/www/nextcloud
+        </Directory>
+
+        SSLEngine on
+        SSLCertificateFile      /etc/ssl/certs/ssl-cert-snakeoil.pem
+        SSLCertificateKeyFile   /etc/ssl/private/ssl-cert-snakeoil.key
+
+        SSLProtocol all -SSLv2 -SSLv3
+        SSLCipherSuite HIGH:!aNULL:!MD5
+        Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains"
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+
 </VirtualHost>
 EOF
 
@@ -307,12 +316,8 @@ echo
 echo -e "${GREEN} Enabling Nextcloud site and Apache modules... ${NC}"
 echo
 
-# Enable the site and required Apache modules
-sudo a2ensite nextcloud.conf
-sudo a2enmod rewrite headers env dir mime
-
-# Restart Apache to apply changes
-sudo service apache2 restart
+# Enable required Apache modules
+sudo a2enmod rewrite headers env dir mime ssl
 echo
 
 
@@ -402,10 +407,6 @@ sudo sed -i 's/;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=1
 sudo sed -i 's/;opcache.memory_consumption=.*/opcache.memory_consumption=1024/' "$PHP_INI"
 sudo sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' "$PHP_INI"
 sudo sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=1/' "$PHP_INI"
-
-# Restart web server
-#sudo systemctl reload apache2
-sudo systemctl restart apache2
 echo
 
 
@@ -463,7 +464,9 @@ echo -e "${GREEN} Preparing firewall for local access...${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
-sudo ufw allow 80/tcp comment "Nextcloud Local Access"
+sudo ufw allow 80/tcp comment "Nextcloud Port 80"
+sudo ufw allow 443/tcp comment "Nextcloud Port 443"
+
 sudo systemctl restart ufw
 echo
 
@@ -524,6 +527,7 @@ fi
 chmod 600 $WORKING_DIRECTORY/.secrets
 echo
 
+
 ############################
 # Data folder / Premission #
 ############################
@@ -544,7 +548,7 @@ sudo chmod -R 755 /var/www/nextcloud/
 # Installing Nexcloud #
 #######################
 
-echo -e "${GREEN} Installing Nexcloud and configuring admin user... ${NC}"
+echo -e "${GREEN} Installing Nexcloud and configuring Admin user... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
 
@@ -559,56 +563,19 @@ echo
 # Trusted domains #
 ###################
 
-echo -e "${GREEN} Setting up Nextcloud Trusted domains... ${NC}"
-sleep 0.5 # delay for 0.5 seconds
+# Get the primary local IP address of the machine more reliably
+LOCAL_IP=$(ip route get 1.1.1.1 | awk '{print $7; exit}')
 
-# Define the file
-CONFIG_FILE="tmp.config.php"
+# Get the short hostname directly
+HOSTNAME=$(hostname -s)
 
-echo
-echo -e "${GREEN} Creating file:${NC} $CONFIG_FILE"
+# Use awk more efficiently to extract the domain name from /etc/resolv.conf
+DOMAIN_LOCAL=$(awk '/^search/ {print $2; exit}' /etc/resolv.conf)
 
-# Temporary file to hold intermediate results
-TEMP_FILE="$(mktemp)"
+# Directly concatenate HOSTNAME and DOMAIN, leveraging shell parameter expansion for conciseness
+LOCAL_DOMAIN="${HOSTNAME}${DOMAIN_LOCAL:+.$DOMAIN_LOCAL}"
 
-# Write the configuration to a temporary file first
-cat <<EOF > "$TEMP_FILE"
-  'trusted_domains' =>
-  array (
-    0 => 'localhost',
-    1 => 'LOCAL_IP',
-    2 => 'HOSTNAME_DOMAIN_LOCAL',
-    3 => 'DOMAIN_INTERNET',
-    4 => 'WWW_DOMAIN_INTERNET',
-  ),
-EOF
-
-# Get the primary local IP address of the machine
-LOCAL_IP=$(hostname -I | awk '{print $1}')
-
-# Get the hostname
-HOSTNAME=$(hostname --short)
-
-# Extract the domain name from /etc/resolv.conf
-DOMAIN_LOCAL=$(grep '^search' /etc/resolv.conf | awk '{print $2}')
-
-# Concatenate HOSTNAME and DOMAIN if DOMAIN is not empty
-if [ -n "$DOMAIN_LOCAL" ]; then
-    HOSTNAME_DOMAIN_LOCAL="${HOSTNAME}.${DOMAIN_LOCAL}"
-else
-    HOSTNAME_DOMAIN_LOCAL="$HOSTNAME"
-fi
-
-# Display the variable values for verification
-echo
-echo -e "${GREEN} Configuration file created:${NC} $CONFIG_FILE"
-echo -e "${GREEN} Local IP:${NC} $LOCAL_IP"
-echo -e "${GREEN} Hostname:${NC} $HOSTNAME"
-echo -e "${GREEN} Local Domain:${NC} $DOMAIN_LOCAL"
-echo -e "${GREEN} Local Hostname and Domain Name:${NC} $HOSTNAME_DOMAIN_LOCAL"
-echo
-
-# Prompt for DOMAIN_INTERNET with error handling for empty input
+# Prompt for domain name for external access, with error handling for empty input
 while true; do
     read -p "Please enter Domain Name for external access: (e.g., domain.com or subdomain.domain.com): " DOMAIN_INTERNET
     if [ -z "$DOMAIN_INTERNET" ]; then
@@ -618,55 +585,48 @@ while true; do
     fi
 done
 
+# Display the variable values for verification
 echo
-echo -e "${GREEN} Domain name:${NC} $DOMAIN_INTERNET"
-
-# Replace placeholders in the temporary file
-sed -i "s/'LOCAL_IP'/'$LOCAL_IP'/g" "$TEMP_FILE"
-sed -i "s/'HOSTNAME_DOMAIN_LOCAL'/'$HOSTNAME_DOMAIN_LOCAL'/g" "$TEMP_FILE"
-sed -i "s/'DOMAIN_INTERNET'/'$DOMAIN_INTERNET'/g" "$TEMP_FILE"
-sed -i "s/'WWW_DOMAIN_INTERNET'/'www.$DOMAIN_INTERNET'/g" "$TEMP_FILE"
-
-# Move the temporary file to the final configuration file
-sudo mv "$TEMP_FILE" $WORKING_DIRECTORY/"$CONFIG_FILE"
+echo -e "${GREEN} Local access:${NC} $LOCAL_IP"
+echo -e "${GREEN}             :${NC} $LOCAL_DOMAIN"
 echo
-echo -e "${GREEN}Trusted Domains are ready for copy in:${NC} $CONFIG_FILE"
+echo -e "${GREEN} External access:${NC} $DOMAIN_INTERNET"
+echo -e "${GREEN}                :${NC} www.$DOMAIN_INTERNET"
 echo
-sleep 1 # delay for 1 seconds
 
-# Search for tmp.config.php in the home directory and assign the path to TMP_FILE
-TMP_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
+    #   # Local
+    #   0 => 'localhost',
+    #   1 => '192.168.30.121',
+    #   2 => 'nextcloud.lan.home-network.me',
+    #   # Web
+    #   3 => 'nextcloud.home-network.me',
+    #   4 => 'www.nextcloud.home-network.me',
 
-# Check if TMP_FILE is not empty
-if [ ! -z "$TMP_FILE" ]; then
-    echo -e "${GREEN}File found:${NC} $TMP_FILE"
-else
-    echo -e "${RED}File not found."
-fi
+cd /var/www/nextcloud
 
-# Define path to the file
-CONFIG_FILE="/var/www/nextcloud/config/config.php"
+sleep 0.5 # delay for 0.5 seconds
+echo -e "${GREEN} Adding Trusted domains... ${NC}"
+echo
 
-# Backup original config file
-sudo cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
+sudo -u www-data php occ config:system:set trusted_domains 1 --value=$LOCAL_IP
+sudo -u www-data php occ config:system:set trusted_domains 2 --value=$LOCAL_DOMAIN
 
-# The pattern to match the block to be replaced and its ending
-START_PATTERN="'trusted_domains' =>"
-END_PATTERN="),"
+sudo -u www-data php occ config:system:set trusted_domains 3 --value=$DOMAIN_INTERNET
+sudo -u www-data php occ config:system:set trusted_domains 4 --value=www.$DOMAIN_INTERNET
 
-# Use awk to replace the block between START_PATTERN and END_PATTERN with new content from TMP_FILE
-# Skip printing lines between START_PATTERN and END_PATTERN, and insert the new content in place
-sudo awk -v start="$START_PATTERN" -v end="$END_PATTERN" -v file="$TMP_FILE" '
-BEGIN {skip=0} 
-$0 ~ start {skip=1; system("cat " file)} 
-$0 ~ end && skip {skip=0; next} 
-!skip' "$CONFIG_FILE.bak" | sudo tee "$CONFIG_FILE" > /dev/null
+# Verify Trusted Domains
+echo
+echo -e "${GREEN} Verifying... ${NC}"
+echo
+sudo -u www-data php occ config:system:get trusted_domains
+
+cd $WORKING_DIRECTORY
 
 echo
 sleep 0.5 # delay for 0.5 seconds
-echo -e "${GREEN} The${NC} config.php ${GREEN}file has been updated. ${NC}"
+echo -e "${GREEN} Trusted domains added to${NC} config.php ${GREEN}file. ${NC}"
 
-# Configuring Trusted domains in Apache
+############# Configuring Trusted domains in Apache
 
 # Define path to the file
 APACHE_CONFIG_FILE="/etc/apache2/sites-available/nextcloud.conf"
@@ -692,14 +652,14 @@ safe_sed_replace() {
 
 # Replace placeholders in Apache configuration file
 safe_sed_replace "DOMAIN_INTERNET" "$DOMAIN_INTERNET" "$APACHE_CONFIG_FILE"
-safe_sed_replace "WWW_DOMAININTERNET" "www.$DOMAIN_INTERNET" "$APACHE_CONFIG_FILE"
 safe_sed_replace "LOCAL_IP" "$LOCAL_IP" "$APACHE_CONFIG_FILE"
-safe_sed_replace "HOSTNAME_DOMAIN_LOCAL" "$HOSTNAME_DOMAIN_LOCAL" "$APACHE_CONFIG_FILE"
+safe_sed_replace "LOCAL_DOMAIN" "$LOCAL_DOMAIN" "$APACHE_CONFIG_FILE"
 
 echo
 echo -e "${GREEN} Apache configuration updated successfully. ${NC}"
-sudo systemctl reload apache2
 echo
+
+###
 
 echo -e "${GREEN} Nextcloud customization in progress... ${NC}"
 echo
@@ -723,7 +683,12 @@ echo
 
 # Set default app to Files
 execute_command config:system:set defaultapp --value="files"
+
+# Maintenance...
 execute_command config:system:set maintenance_window_start --type=integer --value=1
+
+# Generate URLs using a specific protocol
+execute_command config:system:set overwriteprotocol --value="https"
 
 # Disable specific apps
 echo
@@ -735,14 +700,12 @@ echo
 echo -e "${GREEN} All commands executed successfully. ${NC}"
 echo
 
-sudo systemctl reload apache2
-
 
 ######################################
 # Configuring Nextcloud to Use Redis #
 ######################################
 
-echo -e "${GREEN} Configuring Nextcloud to Use Redis... ${NC}"
+echo -e "${GREEN} Configuring Nextcloud to use Redis... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 
 ###
@@ -780,7 +743,7 @@ if ! sudo sed -i 's/# requirepass foobared/requirepass '"$REDIS_PASSWORD"'/' "$R
 fi
 
 echo
-echo "Redis configuration file updated successfully."
+echo -e "${GREEN} Redis configuration file updated successfully. ${NC}"
 echo
 
 ###
@@ -858,7 +821,7 @@ fi
 
 echo
 sleep 0.5 # delay for 0.5 seconds
-echo -e "${GREEN}The config.php file has been updated.${NC}"
+echo -e "${GREEN}The${NC} config.php ${GREEN}file has been updated.${NC}"
 echo
 
 
@@ -885,6 +848,22 @@ echo -e "${GREEN} Operation completed successfully. ${NC}"
 echo
 
 
+################################
+# Activating Nextcloud Website #
+################################
+
+echo -e "${GREEN} Enabling the Nextcloud site configuration in Apache. ${NC}"
+echo
+
+# Enable the site 
+sudo a2ensite nextcloud.conf > /dev/null 2>&1
+
+# Restart Apache to apply changes
+sudo service apache2 restart
+
+# Restarting Redis
+sudo systemctl restart redis-server
+
 ######################
 # Info before reboot #
 ######################
@@ -893,15 +872,15 @@ HOST_IP=$(hostname -I | awk '{print $1}')
 HOST_NAME=$(hostname --short)
 DOMAIN_NAME=$(grep '^domain' /etc/resolv.conf | awk '{print $2}')
 
+echo
 echo -e "${GREEN}REMEMBER: ${NC}"
 sleep 0.5 # delay for 0.5 seconds
-echo
 
 echo
 echo -e "${GREEN} You can find your${NC} Nexcloud server ${GREEN}instance at: ${NC}"
 echo
 echo -e " - http://$HOST_IP"
-echo -e " - http://$HOSTNAME_DOMAIN_LOCAL"
+echo -e " - http://$LOCAL_DOMAIN"
 echo
 echo -e "${GREEN} If you have configured external access, at: ${NC}"
 echo
