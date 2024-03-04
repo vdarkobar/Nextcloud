@@ -2,7 +2,8 @@
 
 clear
 echo
-sudo timedatectl status
+#sudo timedatectl status
+sudo hwclock --hctosys
 sleep 0.5 # delay for 0.5 seconds
 
 ##############################################################
@@ -171,7 +172,7 @@ else
         if sudo sed -i "/$HOST_NAME/d" /etc/hosts && \
            echo "$HOST_IP $HOST_NAME $HOST_NAME.$DOMAIN_NAME" | sudo tee -a /etc/hosts > /dev/null; then
             echo
-            echo -e "${GREEN}File /etc/hosts has been updated.${NC}"
+            echo -e "${GREEN}File${NC} /etc/hosts ${GREEN}has been updated.${NC}"
         else
             # Restore from backup in case of error
             echo -e "${RED}Failed to update /etc/hosts. Restoring from backup...${NC}"
@@ -250,10 +251,15 @@ sudo apt update && sudo apt upgrade -y
 sleep 0.5 # delay for 0.5 seconds
 echo
 
-echo -e "${GREEN} Installing Redis, p7zip... ${NC}"
+echo -e "${GREEN} Installing packages... ${NC}"
 echo
 
-sudo apt install -y redis-server p7zip-full
+sudo apt install -y \
+apache2 \
+mariadb-server \
+redis-server \
+p7zip-full \
+apt-transport-https
 echo
 
 ######################
@@ -262,9 +268,6 @@ echo
 
 echo -e "${GREEN} Installing Apache... ${NC}"
 echo
-
-# Install Apache2
-sudo apt install apache2 -y
 
 # Configure Apache2 for Nextcloud
 cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
@@ -328,13 +331,6 @@ echo
 echo -e "${GREEN} Install PHP 8.3 and necessary PHP modules... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
-
-# Install the apt-transport-https package for HTTPS support
-sudo apt install apt-transport-https -y
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error installing apt-transport-https. Exiting.${NC}"
-    exit 1
-fi
 
 # Add the GPG key for the Ondřej Surý PHP repository
 sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
@@ -414,12 +410,8 @@ echo
 # Install MariaDB #
 ###################
 
-echo -e "${GREEN} Installing and configuring MariaDB...  ${NC}"
+echo -e "${GREEN} Configuring MariaDB...  ${NC}"
 sleep 0.5 # delay for 0.5 seconds
-echo
-
-# Install MariaDB Server
-sudo apt install mariadb-server -y
 
 # Secure MariaDB installation
 sudo mysql -e "DELETE FROM mysql.user WHERE User=''"
@@ -428,7 +420,6 @@ sudo mysql -e "DROP DATABASE IF EXISTS test"
 sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%'"
 sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$ROOT_DB_PASSWORD'"
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "FLUSH PRIVILEGES;"
-
 
 # Create Nextcloud database and user
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
@@ -596,11 +587,11 @@ echo
 
     #   # Local
     #   0 => 'localhost',
-    #   1 => '192.168.30.121',
-    #   2 => 'nextcloud.lan.home-network.me',
+    #   1 => 'local-ip',
+    #   2 => 'subdomain.local-subdomain.domain.com',
     #   # Web
-    #   3 => 'nextcloud.home-network.me',
-    #   4 => 'www.nextcloud.home-network.me',
+    #   3 => 'subdomain.domain.com',
+    #   4 => 'www.subdomain.domain.com',
 
 cd /var/www/nextcloud
 
@@ -674,11 +665,10 @@ execute_command() {
 }
 
 # Install and enable Collabora Online - Built-in CODE Server
-execute_command app:install richdocumentscode
-#execute_command app:enable richdocumentscode
-
+#execute_command app:install richdocumentscode
+                                                    # iskljuceno trenutno, 
 # Enable Nextcloud Office App
-execute_command app:enable richdocuments
+#execute_command app:enable richdocuments
 echo
 
 # Set default app to Files
@@ -699,6 +689,8 @@ execute_command app:disable recommendations
 echo
 echo -e "${GREEN} All commands executed successfully. ${NC}"
 echo
+
+cd $WORKING_DIRECTORY
 
 
 ######################################
@@ -749,7 +741,7 @@ echo
 ###
 
 # Define temporary configuration file
-CONFIGREDIS_FILE="tmp2.config.php"
+CONFIGREDIS_FILE="tmp.config.php"
 
 echo -e "${GREEN} Creating file:${NC} $CONFIGREDIS_FILE"
 
@@ -788,7 +780,7 @@ sleep 1 # delay for 1 seconds
 ###
 
 # Search for tmp2.config.php in the home directory and assign the path to TMP_FILE
-TMP2_FILE=$(find ~/ -type f -name "tmp2.config.php" 2>/dev/null)
+TMP2_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
 
 # Check if TMP_FILE is not empty
 if [ ! -z "$TMP2_FILE" ]; then
@@ -824,6 +816,9 @@ sleep 0.5 # delay for 0.5 seconds
 echo -e "${GREEN}The${NC} config.php ${GREEN}file has been updated.${NC}"
 echo
 
+#echo -e "${GREEN}Updating ${NC} .htaccess ${GREEN}file.${NC}"
+#sudo -u www-data php /var/www/nextcloud/occ maintenance:update:htaccess
+#echo
 
 ###########################
 # Securing sensitive data #
@@ -855,14 +850,15 @@ echo
 echo -e "${GREEN} Enabling the Nextcloud site configuration in Apache. ${NC}"
 echo
 
-# Enable the site 
-sudo a2ensite nextcloud.conf > /dev/null 2>&1
+# Enable the site (2>&1)
+sudo a2ensite nextcloud.conf > /dev/null 
 
 # Restart Apache to apply changes
 sudo service apache2 restart
 
 # Restarting Redis
 sudo systemctl restart redis-server
+
 
 ######################
 # Info before reboot #
