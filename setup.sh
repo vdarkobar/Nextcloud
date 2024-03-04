@@ -188,6 +188,7 @@ fi
 # Database passwords #
 ######################
 
+echo
 echo -e "${GREEN}Creating database passwords... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 echo
@@ -238,9 +239,9 @@ sleep 0.5 # delay for 0.5 seconds
 echo
 
 
-#############################################
-# Updating system, installing some packages #
-#############################################
+########################################
+# Updating system, installing packages #
+########################################
 
 echo -e "${GREEN} Updating packages and upgrading the system... ${NC}"
 echo
@@ -370,7 +371,7 @@ echo -e "${GREEN} PHP 8.3 and required packages have been installed successfully
 echo
 
 
-####################
+###################
 # Configuring PHP #
 ###################
 
@@ -406,9 +407,9 @@ sudo sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=1/' "$PHP_INI
 echo
 
 
-###################
-# Install MariaDB #
-###################
+###########
+# MariaDB #
+###########
 
 echo -e "${GREEN} Configuring MariaDB...  ${NC}"
 sleep 0.5 # delay for 0.5 seconds
@@ -446,9 +447,9 @@ sudo mv nextcloud /var/www/
 echo
 
 
-####################
-# Prepare firewall #
-####################
+#######
+# UFW #
+#######
 
 echo -e "${GREEN} Preparing firewall for local access...${NC}"
 
@@ -730,7 +731,25 @@ fi
 
 # Attempt to update the Redis configuration file with the password
 if ! sudo sed -i 's/# requirepass foobared/requirepass '"$REDIS_PASSWORD"'/' "$REDISCONFIG_FILE"; then
-  echo "Error: Failed to update Redis configuration file."
+  echo "Error: Failed to update Redis password."
+  exit 1
+fi
+
+# Attempt to update the Redis configuration file with the new port nummber
+if ! sudo sed -i 's/port 6379/port 0/' "$REDISCONFIG_FILE"; then
+  echo "Error: Failed to update Redis port number."
+  exit 1
+fi
+
+# Attempt to enable Redis socket
+if ! sudo sed -i 's|# unixsocket /run/redis/redis-server.sock|unixsocket /run/redis/redis-server.sock|' "$REDISCONFIG_FILE"; then
+  echo "Error: Failed to enable Redis socket."
+  exit 1
+fi
+
+# Attempt to set Redis socket permissions
+if ! sudo sed -i 's/# unixsocketperm 700/unixsocketperm 770/' "$REDISCONFIG_FILE"; then
+  echo "Error: Failed to update Redis socket permissions."
   exit 1
 fi
 
@@ -750,12 +769,15 @@ TEMP_FILE="$(mktemp)"
 
 # Write the configuration to a temporary file first
 cat <<EOF > "$TEMP_FILE"
+  'htaccess.RewriteBase' => '/',
+  'default_phone_region' => 'DE',
   'memcache.local' => '\\OC\\Memcache\\Redis',
   'memcache.locking' => '\\OC\\Memcache\\Redis',
+  'memcache.distributed' => '\\OC\Memcache\Redis',
   'redis' =>
   array (
-    'host' => 'localhost',
-    'port' => 6379,
+    'host' => '/var/run/redis/redis-server.sock',
+    'port' => 0,
     'password' => 'REDIS_PASSWORD',
   ),
 EOF
@@ -779,7 +801,7 @@ sleep 1 # delay for 1 seconds
 
 ###
 
-# Search for tmp2.config.php in the home directory and assign the path to TMP_FILE
+# Search for tmp.config.php in the home directory and assign the path to TMP_FILE
 TMP2_FILE=$(find ~/ -type f -name "tmp.config.php" 2>/dev/null)
 
 # Check if TMP_FILE is not empty
@@ -816,9 +838,9 @@ sleep 0.5 # delay for 0.5 seconds
 echo -e "${GREEN}The${NC} config.php ${GREEN}file has been updated.${NC}"
 echo
 
-#echo -e "${GREEN}Updating ${NC} .htaccess ${GREEN}file.${NC}"
-#sudo -u www-data php /var/www/nextcloud/occ maintenance:update:htaccess
-#echo
+# Adding Apache user to Redis group
+sudo usermod -aG redis www-data
+
 
 ###########################
 # Securing sensitive data #
@@ -875,8 +897,8 @@ sleep 0.5 # delay for 0.5 seconds
 echo
 echo -e "${GREEN} You can find your${NC} Nexcloud server ${GREEN}instance at: ${NC}"
 echo
-echo -e " - http://$HOST_IP"
-echo -e " - http://$LOCAL_DOMAIN"
+echo -e " - $HOST_IP"
+echo -e " - $LOCAL_DOMAIN"
 echo
 echo -e "${GREEN} If you have configured external access, at: ${NC}"
 echo
