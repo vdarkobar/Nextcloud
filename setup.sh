@@ -46,27 +46,31 @@ echo
 #######################################
 
 while true; do
-    echo -e "${GREEN}Start installation and configuration?${NC} (y/n)"
+    echo -e "${GREEN}Start installation and configuration?${NC} (yes/no)"
     echo
-    read choice
+    read -r choice
 
-    # Check if user entered "y" or "Y"
-    if [[ "$choice" == [yY] ]]; then
+    # Convert input to lowercase to standardize comparison
+    choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
 
+    # Check if user entered "yes"
+    if [[ "$choice" == "yes" ]]; then
         # Confirming the start of the script
         echo
         echo -e "${GREEN}Starting... ${NC}"
         sleep 0.5 # delay for 0.5 second
         break
 
-    # If user entered "n" or "N", exit the script
-    elif [[ "$choice" == [nN] ]]; then
+    # If user entered "no", exit the script
+    elif [[ "$choice" == "no" ]]; then
         echo -e "${RED}Aborting script. ${NC}"
         exit
 
     # If user entered anything else, ask them to correct it
     else
-        echo -e "${YELLOW}Invalid input. Please enter${NC} 'y' or 'n' "
+        echo
+        echo -e "${YELLOW}Invalid input. Please enter 'yes' or 'no'.${NC}"
+        echo
     fi
 done
 
@@ -184,58 +188,209 @@ else
 fi
 
 
-######################
-# Database passwords #
-######################
+###########
+# Secrets #
+###########
 
 echo
-echo -e "${GREEN}Creating database passwords... ${NC}"
+echo -e "${GREEN} Creating database passwords... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
-echo
 
 # Generate ROOT_DB_PASSWORD
 ROOT_DB_PASSWORD=$(openssl rand -base64 32 | sed 's/[^a-zA-Z0-9]//g')
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error generating ROOT_DB_PASSWORD. ${NC}"
+    echo -e "${RED}Error generating Root DB password. ${NC}"
     exit 1
 fi
 
 # Save ROOT_DB_PASSWORD
 mkdir -p $WORKING_DIRECTORY/.secrets && echo $ROOT_DB_PASSWORD > $WORKING_DIRECTORY/.secrets/ROOT_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error saving ROOT_DB_PASSWORD. ${NC}"
+    echo -e "${RED}Error saving Root DB password. ${NC}"
     exit 1
 fi
 
 # Generate NEXTCLOUD_DB_PASSWORD
 NEXTCLOUD_DB_PASSWORD=$(openssl rand -base64 32 | sed 's/[^a-zA-Z0-9]//g')
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error generating NEXTCLOUD_DB_PASSWORD. ${NC}"
+    echo -e "${RED}Error generating Nextcloud DB password. ${NC}"
     exit 1
 fi
 
 # Save NEXTCLOUD_DB_PASSWORD
 mkdir -p $WORKING_DIRECTORY/.secrets && echo $NEXTCLOUD_DB_PASSWORD > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_DB_PASSWORD.secret
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error saving NEXTCLOUD_DB_PASSWORD. ${NC}"
+    echo -e "${RED}Error saving Nextcloud DB password. ${NC}"
     exit 1
 fi
 
 # Generate REDIS_PASSWORD
 REDIS_PASSWORD=$(openssl rand -base64 32 | sed 's/[^a-zA-Z0-9]//g')
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error generating REDIS_PASSWORD. ${NC}"
+    echo -e "${RED}Error generating Redis password. ${NC}"
     exit 1
 fi
 
 # Save REDIS_PASSWORD
 mkdir -p $WORKING_DIRECTORY/.secrets && echo $REDIS_PASSWORD > $WORKING_DIRECTORY/.secrets/REDIS_PASSWORD.secret
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error saving REDIS_PASSWORD. ${NC}"
+    echo -e "${RED}Error saving Redis password. ${NC}"
     exit 1
 fi
 
 sleep 0.5 # delay for 0.5 seconds
+echo
+
+###
+
+echo -e "${GREEN} Setting Nextcloud Admin user name and password... ${NC}"
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+# Initialize variables
+NEXTCLOUD_ADMIN_USER=""
+NEXTCLOUD_ADMIN_PASSWORD=""
+
+# Function to ask for the Nextcloud admin user
+ask_admin_user() {
+    read -p "Enter Nextcloud admin user: " NEXTCLOUD_ADMIN_USER
+    if [[ -z "$NEXTCLOUD_ADMIN_USER" ]]; then
+        echo -e "${YELLOW}The admin user cannot be empty. Please enter a valid user.${NC}"
+        ask_admin_user
+    fi
+}
+
+# Function to ask for the Nextcloud admin password
+ask_admin_password() {
+    # Use -s option to hide password input
+    read -s -p "Enter Nextcloud admin password: " NEXTCLOUD_ADMIN_PASSWORD
+    echo  # Move to a new line
+    if [[ -z "$NEXTCLOUD_ADMIN_PASSWORD" ]]; then
+        echo -e "${YELLOW}The admin password cannot be empty. Please enter a valid password.${NC}"
+        ask_admin_password
+    fi
+}
+
+# Call functions to get user input
+ask_admin_user
+ask_admin_password
+
+# Ensure the .secrets directory exists
+mkdir -p $WORKING_DIRECTORY/.secrets
+
+# Save Admin User Name
+echo "$NEXTCLOUD_ADMIN_USER" > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_ADMIN_USER.secret
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error saving Admin User Name. ${NC}"
+    exit 1
+fi
+
+# Save Admin Password
+echo "$NEXTCLOUD_ADMIN_PASSWORD" > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_ADMIN_PASSWORD.secret
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error saving Admin Password. ${NC}"
+    exit 1
+fi
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+###
+
+echo -e "${GREEN} Setting up Email Address for certificate registration... ${NC}"
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+# Prompt for email address for certificate registration
+while true; do
+    read -p "Please enter your Email Address for certificate registration: " EMAIL_ADDRESS
+    if [ -z "$EMAIL_ADDRESS" ]; then
+        echo -e "${RED}Error: Email Address cannot be empty. Please try again.${NC}"
+    else
+        # Validate the email address format if necessary
+        # This is a simple regex for basic validation; for more complex validation consider using external tools
+        if [[ "$EMAIL_ADDRESS" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
+            break
+        else
+            echo -e "${RED}Error: Invalid email address format. Please try again.${NC}"
+        fi
+    fi
+done
+
+# Save Email Address
+mkdir -p $WORKING_DIRECTORY/.secrets && echo $EMAIL_ADDRESS > $WORKING_DIRECTORY/.secrets/EMAIL_ADDRESS.secret
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error saving Email address. ${NC}"
+    exit 1
+fi
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+###
+
+echo -e "${GREEN} Setting up Cloudflare API token... ${NC}"
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+# Path to the Cloudflare credentials file
+CREDENTIALS_FILE="/etc/letsencrypt/cloudflare.ini"
+
+# Function to prompt for Cloudflare API token
+prompt_for_api_token() {
+    echo -e "${YELLOW}Enter your Cloudflare API token here:${NC}"
+    echo
+    read -r cloudflare_api_token
+    echo
+
+    # Check for empty input and repeat the prompt if necessary
+    while [[ -z "$cloudflare_api_token" ]]; do
+        echo -e "${RED}Error: Cloudflare API token is required.${NC}"
+        echo -e "${YELLOW}Enter your Cloudflare API token:${NC}"
+        read -r cloudflare_api_token
+    done
+}
+
+# Call the function to prompt for the API token
+prompt_for_api_token
+
+# Ensure the directory for the credentials file exists
+if ! sudo test -d "$(dirname "$CREDENTIALS_FILE")"; then
+    echo -e "${YELLOW}Creating directory for Cloudflare credentials.${NC}"
+    sudo mkdir -p "$(dirname "$CREDENTIALS_FILE")"
+fi
+
+# Attempt to create or overwrite the Cloudflare credentials file with the API token
+if ! echo "dns_cloudflare_api_token = $cloudflare_api_token" | sudo tee "$CREDENTIALS_FILE" > /dev/null; then
+    echo -e "${RED}Error: Failed to write to $CREDENTIALS_FILE${NC}"
+    exit 1
+fi
+
+# Secure the API token file
+if ! sudo chmod 600 "$CREDENTIALS_FILE"; then
+    echo -e "${RED}Error: Failed to set permissions for $CREDENTIALS_FILE${NC}"
+    exit 1
+fi
+
+echo
+sleep 0.5 # delay for 0.5 seconds
+echo -e "${GREEN}Cloudflare credentials file created and secured successfully.${NC}"
+echo
+
+###
+
+# Prompt for domain name for external access, with error handling for empty input
+sleep 0.5 # delay for 0.5 seconds
+
+while true; do
+    read -p "Please enter Domain Name for external access: (e.g., domain.com or subdomain.domain.com): " DOMAIN_INTERNET
+    if [ -z "$DOMAIN_INTERNET" ]; then
+        echo -e "${RED}Error: Domain Name cannot be empty. Please try again.${NC}"
+    else
+        break
+    fi
+done
+
 echo
 
 
@@ -243,6 +398,25 @@ echo
 # Updating system, installing packages #
 ########################################
 
+sleep 0.5 # delay for 0.5 seconds
+echo -e "${GREEN} Setting up PHP Repository...${NC}"
+
+# Add the GPG key for the Ondřej Surý PHP repository
+sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error downloading the GPG key for PHP repository. Exiting.${NC}"
+    exit 1
+fi
+
+# Add the PHP repository to the sources list
+sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error adding the PHP repository to sources list. Exiting.${NC}"
+    exit 1
+fi
+
+echo
+sleep 0.5 # delay for 0.5 seconds
 echo -e "${GREEN} Updating packages and upgrading the system... ${NC}"
 echo
 
@@ -255,19 +429,50 @@ echo
 echo -e "${GREEN} Installing packages... ${NC}"
 echo
 
-sudo apt install -y \
+if ! sudo apt install -y \
 apache2 \
 mariadb-server \
 redis-server \
 p7zip-full \
-apt-transport-https
+apt-transport-https \
+certbot \
+python3-certbot-dns-cloudflare \
+php8.3 \
+libapache2-mod-php8.3 \
+php8.3-{zip,xml,mbstring,gd,curl,imagick,intl,bcmath,gmp,cli,mysql,apcu,redis,smbclient,ldap,bz2,fpm} \
+php-dompdf \
+libmagickcore-6.q16-6-extra \
+php-pear; then
+    echo -e "${RED}Error installing required packages. Exiting.${NC}"
+    exit 1
+fi
+
 echo
+echo -e "${GREEN} Required packages installed successfully. ${NC}"
+echo
+
+
+#######
+# UFW #
+#######
+
+echo -e "${GREEN} Preparing firewall for local access...${NC}"
+
+sleep 0.5 # delay for 0.5 seconds
+echo
+
+sudo ufw allow 80/tcp comment "Nextcloud Port 80"
+sudo ufw allow 443/tcp comment "Nextcloud Port 443"
+
+sudo systemctl restart ufw
+echo
+
 
 ######################
 # Apache HTTP Server #
 ######################
 
-echo -e "${GREEN} Installing Apache... ${NC}"
+echo -e "${GREEN} Creating Apache Virtual hosts file for Nextcloud... ${NC}"
 echo
 
 # Configure Apache2 for Nextcloud
@@ -283,7 +488,7 @@ cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
 </VirtualHost>
 
 <VirtualHost *:443>
-        ServerAdmin webmaster@localhost
+        ServerAdmin EMAIL_ADDRESS
         DocumentRoot /var/www/nextcloud
 
         ServerName DOMAIN_INTERNET
@@ -317,59 +522,12 @@ cat <<EOF | sudo tee /etc/apache2/sites-available/nextcloud.conf
 EOF
 
 echo
-echo -e "${GREEN} Enabling Nextcloud site and Apache modules... ${NC}"
+echo -e "${GREEN} Enabling Apache modules... ${NC}"
 echo
 
 # Enable required Apache modules
 sudo a2enmod rewrite headers env dir mime ssl
 echo
-
-
-#############################################
-# Install PHP 8.3 and necessary PHP modules #
-#############################################
-
-echo -e "${GREEN} Install PHP 8.3 and necessary PHP modules... ${NC}"
-sleep 0.5 # delay for 0.5 seconds
-echo
-
-# Add the GPG key for the Ondřej Surý PHP repository
-sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error downloading the GPG key for PHP repository. Exiting.${NC}"
-    exit 1
-fi
-
-# Add the PHP repository to the sources list
-sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error adding the PHP repository to sources list. Exiting.${NC}"
-    exit 1
-fi
-
-# Update apt sources
-sudo apt update
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error updating apt sources. Exiting.${NC}"
-    exit 1
-fi
-
-# Install PHP 8.3 and required packages
-if ! sudo apt install -y \
-php8.3 \
-libapache2-mod-php8.3 \
-php8.3-{zip,xml,mbstring,gd,curl,imagick,intl,bcmath,gmp,cli,mysql,apcu,redis,smbclient,ldap,bz2,fpm} \
-php-dompdf \
-libmagickcore-6.q16-6-extra \
-php-pear; then
-    echo -e "${RED}Error installing PHP 8.3 and required packages. Exiting.${NC}"
-    exit 1
-fi
-
-echo
-echo -e "${GREEN} PHP 8.3 and required packages have been installed successfully.${NC}"
-echo
-
 
 ###################
 # Configuring PHP #
@@ -411,7 +569,7 @@ echo
 # MariaDB #
 ###########
 
-echo -e "${GREEN} Configuring MariaDB...  ${NC}"
+echo -e "${GREEN} Configuring MariaDB for Nextcloud...  ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 
 # Secure MariaDB installation
@@ -428,6 +586,8 @@ mysql -u root -p"$ROOT_DB_PASSWORD" -e "CREATE USER 'nextclouduser'@'localhost' 
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextclouduser'@'localhost';"
 mysql -u root -p"$ROOT_DB_PASSWORD" -e "FLUSH PRIVILEGES;"
 echo
+
+sleep 0.5 # delay for 0.5 seconds
 
 
 #############
@@ -446,83 +606,7 @@ cd /tmp && wget https://download.nextcloud.com/server/releases/latest.zip
 sudo mv nextcloud /var/www/
 echo
 
-
-#######
-# UFW #
-#######
-
-echo -e "${GREEN} Preparing firewall for local access...${NC}"
-
-sleep 0.5 # delay for 0.5 seconds
-echo
-
-sudo ufw allow 80/tcp comment "Nextcloud Port 80"
-sudo ufw allow 443/tcp comment "Nextcloud Port 443"
-
-sudo systemctl restart ufw
-echo
-
-
-###################################
-# Nextcloud Admin User / Password #
-###################################
-
-echo -e "${GREEN} Setting Nextcloud Admin user name/password... ${NC}"
-
-sleep 0.5 # delay for 0.5 seconds
-echo
-
-# Initialize variables
-NEXTCLOUD_ADMIN_USER=""
-NEXTCLOUD_ADMIN_PASSWORD=""
-
-# Function to ask for the Nextcloud admin user
-ask_admin_user() {
-    read -p "Enter Nextcloud admin user: " NEXTCLOUD_ADMIN_USER
-    if [[ -z "$NEXTCLOUD_ADMIN_USER" ]]; then
-        echo -e "${YELLOW}The admin user cannot be empty. Please enter a valid user.${NC}"
-        ask_admin_user
-    fi
-}
-
-# Function to ask for the Nextcloud admin password
-ask_admin_password() {
-    read -p "Enter Nextcloud admin password: " NEXTCLOUD_ADMIN_PASSWORD
-    if [[ -z "$NEXTCLOUD_ADMIN_PASSWORD" ]]; then
-        echo -e "${YELLOW}The admin password cannot be empty. Please enter a valid password.${NC}"
-        ask_admin_password
-    fi
-}
-
-# Call functions to get user input
-ask_admin_user
-ask_admin_password
-
-# Ensure the .secrets directory exists
-mkdir -p $WORKING_DIRECTORY/.secrets
-
-# Save Admin User Name
-echo "$NEXTCLOUD_ADMIN_USER" > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_ADMIN_USER.secret
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error saving Admin User Name. ${NC}"
-    exit 1
-fi
-
-# Save Admin Password
-echo "$NEXTCLOUD_ADMIN_PASSWORD" > $WORKING_DIRECTORY/.secrets/NEXTCLOUD_ADMIN_PASSWORD.secret
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error saving Admin Password. ${NC}"
-    exit 1
-fi
-
-# Ensure the .secrets directory has correct permissions
-chmod 600 $WORKING_DIRECTORY/.secrets
-echo
-
-
-############################
-# Data folder / Premission #
-############################
+###
 
 echo -e "${GREEN} Creating data folder and setting premissions... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
@@ -535,10 +619,7 @@ sudo chown -R www-data:www-data /home/data/
 sudo chown -R www-data:www-data /var/www/nextcloud/
 sudo chmod -R 755 /var/www/nextcloud/
 
-
-#######################
-# Installing Nexcloud #
-#######################
+###
 
 echo -e "${GREEN} Installing Nexcloud and configuring Admin user... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
@@ -567,17 +648,7 @@ DOMAIN_LOCAL=$(awk '/^search/ {print $2; exit}' /etc/resolv.conf)
 # Directly concatenate HOSTNAME and DOMAIN, leveraging shell parameter expansion for conciseness
 LOCAL_DOMAIN="${HOSTNAME}${DOMAIN_LOCAL:+.$DOMAIN_LOCAL}"
 
-# Prompt for domain name for external access, with error handling for empty input
-while true; do
-    read -p "Please enter Domain Name for external access: (e.g., domain.com or subdomain.domain.com): " DOMAIN_INTERNET
-    if [ -z "$DOMAIN_INTERNET" ]; then
-        echo -e "${RED}Error: Domain Name cannot be empty. Please try again.${NC}"
-    else
-        break
-    fi
-done
-
-# Display the variable values for verification
+# Display variable values for verification
 echo
 echo -e "${GREEN} Local access:${NC} $LOCAL_IP"
 echo -e "${GREEN}             :${NC} $LOCAL_DOMAIN"
@@ -618,7 +689,7 @@ echo
 sleep 0.5 # delay for 0.5 seconds
 echo -e "${GREEN} Trusted domains added to${NC} config.php ${GREEN}file. ${NC}"
 
-############# Configuring Trusted domains in Apache
+### Configuring Trusted domains in Apache
 
 # Define path to the file
 APACHE_CONFIG_FILE="/etc/apache2/sites-available/nextcloud.conf"
@@ -643,6 +714,7 @@ safe_sed_replace() {
 }
 
 # Replace placeholders in Apache configuration file
+safe_sed_replace "EMAIL_ADDRESS" "$EMAIL_ADDRESS" "$APACHE_CONFIG_FILE"
 safe_sed_replace "DOMAIN_INTERNET" "$DOMAIN_INTERNET" "$APACHE_CONFIG_FILE"
 safe_sed_replace "LOCAL_IP" "$LOCAL_IP" "$APACHE_CONFIG_FILE"
 safe_sed_replace "LOCAL_DOMAIN" "$LOCAL_DOMAIN" "$APACHE_CONFIG_FILE"
@@ -666,10 +738,10 @@ execute_command() {
 }
 
 # Install and enable Collabora Online - Built-in CODE Server
-#execute_command app:install richdocumentscode
-                                                    # iskljuceno trenutno, 
+execute_command app:install richdocumentscode
+
 # Enable Nextcloud Office App
-#execute_command app:enable richdocuments
+execute_command app:enable richdocuments
 echo
 
 # Set default app to Files
@@ -680,6 +752,9 @@ execute_command config:system:set maintenance_window_start --type=integer --valu
 
 # Generate URLs using a specific protocol
 execute_command config:system:set overwriteprotocol --value="https"
+
+# Allow list for WOPI requests
+execute_command config:app:set richdocuments wopi_allowlist --value=$LOCAL_IP
 
 # Disable specific apps
 echo
@@ -694,68 +769,63 @@ echo
 cd $WORKING_DIRECTORY
 
 
-######################################
-# Configuring Nextcloud to Use Redis #
-######################################
+#####################
+# Configuring Redis #
+#####################
 
-echo -e "${GREEN} Configuring Nextcloud to use Redis... ${NC}"
+echo -e "${GREEN} Configuring Redis... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 
-###
-
-# Define the Redis configuration file and it's backup
+# Define the Redis configuration file and its backup
 REDISCONFIG_FILE="/etc/redis/redis.conf"
 REDISBACKUP_FILE="/etc/redis/redis.conf.bak"
 
 # Attempt to copy the Redis configuration file to a backup file
 if ! sudo cp "$REDISCONFIG_FILE" "$REDISBACKUP_FILE"; then
-  echo "Error: Failed to copy $REDISCONFIG_FILE to $REDISBACKUP_FILE."
+  echo -e "${RED}Error: Failed to copy $REDISCONFIG_FILE to $REDISBACKUP_FILE.${NC}"
   exit 1
 fi
 
 echo
-echo "Backup of Redis configuration file created successfully at $REDISBACKUP_FILE"
+echo -e "${GREEN}Backup of Redis configuration file created successfully at $REDISBACKUP_FILE${NC}"
 echo
 
 # Check if REDIS_PASSWORD is set
 if [ -z "$REDIS_PASSWORD" ]; then
-  echo "Error: Redis password is not set."
+  echo -e "${RED}Error: Redis password is not set.${NC}"
   exit 1
 fi
 
 # Check if the Redis configuration file exists using sudo
 if ! sudo test -f "$REDISCONFIG_FILE"; then
-  echo "Error: Redis configuration file does not exist at $REDISCONFIG_FILE."
+  echo -e "${RED}Error: Redis configuration file does not exist at $REDISCONFIG_FILE.${NC}"
   exit 1
 fi
 
 # Attempt to update the Redis configuration file with the password
 if ! sudo sed -i 's/# requirepass foobared/requirepass '"$REDIS_PASSWORD"'/' "$REDISCONFIG_FILE"; then
-  echo "Error: Failed to update Redis password."
+  echo -e "${RED}Error: Failed to update Redis password.${NC}"
   exit 1
 fi
 
-# Attempt to update the Redis configuration file with the new port nummber
+# Attempt to update the Redis configuration file with the new port number
 if ! sudo sed -i 's/port 6379/port 0/' "$REDISCONFIG_FILE"; then
-  echo "Error: Failed to update Redis port number."
+  echo -e "${RED}Error: Failed to update Redis port number.${NC}"
   exit 1
 fi
 
 # Attempt to enable Redis socket
 if ! sudo sed -i 's|# unixsocket /run/redis/redis-server.sock|unixsocket /run/redis/redis-server.sock|' "$REDISCONFIG_FILE"; then
-  echo "Error: Failed to enable Redis socket."
+  echo -e "${RED}Error: Failed to enable Redis socket.${NC}"
   exit 1
 fi
 
 # Attempt to set Redis socket permissions
 if ! sudo sed -i 's/# unixsocketperm 700/unixsocketperm 770/' "$REDISCONFIG_FILE"; then
-  echo "Error: Failed to update Redis socket permissions."
+  echo -e "${RED}Error: Failed to update Redis socket permissions.${NC}"
   exit 1
 fi
 
-echo
-echo -e "${GREEN} Redis configuration file updated successfully. ${NC}"
-echo
 
 ###
 
@@ -776,7 +846,7 @@ cat <<EOF > "$TEMP_FILE"
   'memcache.distributed' => '\\OC\Memcache\Redis',
   'redis' =>
   array (
-    'host' => '/var/run/redis/redis-server.sock',
+    'host' => '/run/redis/redis-server.sock',
     'port' => 0,
     'password' => 'REDIS_PASSWORD',
   ),
@@ -843,6 +913,114 @@ sudo usermod -aG redis www-data
 
 
 ###########################
+# Certbot SSL certificate #
+###########################
+
+# CERT_DOMAIN=LOCAL_DOMAIN
+
+# Initialize user_choice to an empty string
+user_choice=""
+
+# Loop until a valid input is received
+while [[ "$user_choice" != "yes" && "$user_choice" != "no" ]]; do
+    echo -e "${YELLOW}Do you want to use Certbot to create SSL certificate for Local domain?${NC} (yes/no)"
+    echo
+    read -r user_choice
+    echo
+    
+    # Convert input to lowercase to standardize comparison
+    user_choice=$(echo "$user_choice" | tr '[:upper:]' '[:lower:]')
+    
+    if [[ "$user_choice" == "yes" ]]; then
+        # User chose to use Certbot for wildcard SSL certificate
+        if sudo certbot certonly \
+          --dns-cloudflare \
+          --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+          -d $LOCAL_DOMAIN \
+          --agree-tos \
+          --email "$EMAIL_ADDRESS" \
+          --non-interactive; then
+            echo -e "${GREEN}Certificate obtained successfully.${NC}"
+            echo
+            
+            # After successfully obtaining the certificate, modify the Apache configuration
+            APACHE_CONF="/etc/apache2/sites-available/nextcloud.conf"
+            sudo sed -i "s|SSLCertificateFile.*|SSLCertificateFile      /etc/letsencrypt/live/$LOCAL_DOMAIN/fullchain.pem|" "$APACHE_CONF"
+            sudo sed -i "s|SSLCertificateKeyFile.*|SSLCertificateKeyFile   /etc/letsencrypt/live/$LOCAL_DOMAIN/privkey.pem|" "$APACHE_CONF"
+            
+            echo -e "${GREEN}Apache configuration updated successfully.${NC}"
+            echo
+            
+            # Certbot backup
+            cd $WORKING_DIRECTORY
+
+            # Capture the current date and time in a variable
+            CURRENT_DATE=$(date +%Y-%m-%d_%H-%M)
+
+            # Backup parameters
+            BACKUP_DIR="/etc/letsencrypt"
+            BACKUP_FILE="certbot-backup-${CURRENT_DATE}.tar.gz"
+            ENCRYPTED_FILE="${BACKUP_FILE}.gpg"
+
+            # Check if the backup directory exists
+            if [ ! -d "$BACKUP_DIR" ]; then
+                echo -e "${RED}Error: Backup directory ${BACKUP_DIR} does not exist. Exiting.${NC}"
+                exit 1
+            fi
+
+            # Create a Backup using the captured date and time
+            echo -e "${YELLOW}Creating backup of ${BACKUP_DIR}...${NC}"
+
+            # Directly checking the command's success with an if-statement
+            if sudo tar -cvzf "${BACKUP_FILE}" "${BACKUP_DIR}" > /dev/null; then
+                echo
+                echo -e "${GREEN}Backup created successfully: ${BACKUP_FILE}${NC}"
+            else
+                echo -e "${RED}Error creating backup. Exiting.${NC}"
+                exit 1
+            fi
+
+            # Encrypt the backup file using the same date and time
+            echo
+            echo -e "${YELLOW}Encrypting the backup file...${NC}"
+            echo
+            if echo $NEXTCLOUD_ADMIN_PASSWORD | gpg --batch --yes --passphrase-fd 0 --symmetric --cipher-algo aes256 -o "${ENCRYPTED_FILE}" "${BACKUP_FILE}"; then
+                echo
+                echo -e "${GREEN}Encryption successful: ${ENCRYPTED_FILE}${NC}"
+                echo
+            else
+                echo -e "${RED}Error encrypting file. Exiting.${NC}"
+                exit 1
+            fi
+
+            # Remove the original backup file after encryption
+            sudo rm "${BACKUP_FILE}"
+
+            echo -e "${GREEN}Backup and encryption process completed successfully.${NC}"
+            echo
+            echo -e "${GREEN}Use Nextcloud Admin user password to dencrypt the file.${NC}"
+
+        else
+            echo -e "${RED}Failed to obtain the certificate. Please check your settings and try again.${NC}"
+        fi
+        break # Exit the loop after completing the operation
+        
+    elif [[ "$user_choice" == "no" ]]; then
+        # User chose to continue with self-signed certificates
+        echo -e "${YELLOW}Continuing with self-signed certificates.${NC}"
+        # Add any commands here for handling the self-signed certificate path
+        break # Exit the loop
+    else
+        # User entered an invalid choice, prompt again
+        echo -e "${RED}Invalid choice. Please type 'yes' to use Certbot or 'no' to continue with self-signed certificates.${NC}"
+        # The loop will continue
+    fi
+done
+
+echo
+
+
+###########################
 # Securing sensitive data #
 ###########################
 
@@ -850,7 +1028,7 @@ echo -e "${GREEN} Securing sensitive data... ${NC}"
 echo
 sleep 0.5 # delay for 0.5 seconds
 
-# Change ownership and permissions
+# Change ownership and permissions for .secrets/ folder
 if ! sudo chown -R root:root $WORKING_DIRECTORY/.secrets/; then
     echo -e "${RED}Error changing ownership of secrets directory. ${NC}"
     exit 1
@@ -865,15 +1043,15 @@ echo -e "${GREEN} Operation completed successfully. ${NC}"
 echo
 
 
-################################
-# Activating Nextcloud Website #
-################################
+###########################
+# Activating Apache sites #
+###########################
 
 echo -e "${GREEN} Enabling the Nextcloud site configuration in Apache. ${NC}"
-echo
+sleep 0.5 # delay for 0.5 seconds
 
 # Enable the site (2>&1)
-sudo a2ensite nextcloud.conf > /dev/null 
+sudo a2ensite nextcloud.conf > /dev/null
 
 # Restart Apache to apply changes
 sudo service apache2 restart
