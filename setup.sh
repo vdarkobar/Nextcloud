@@ -28,16 +28,16 @@ NC='\033[0m'
 
 echo
 echo -e "${GREEN} This script will install and configure latest${NC}" Nextcloud server 
-echo -e "${GREEN} and it's prerequisites:${NC} Apache HTTP Server, PHP 8.3, Redis ${GREEN}and${NC} MariaDB" 
+echo -e "${GREEN} and it's prerequisites:${NC} Apache HTTP Server, PHP 8.3, MariaDB, Redis ${GREEN}and${NC} Certbot" 
 
 sleep 0.5 # delay for 0.5 seconds
 echo
 
-echo -e "${GREEN} You'll be asked to enter: ${NC}"
+echo -e "${GREEN} Decide what you will use for: ${NC}"
 echo -e "${GREEN} - User name and Password for ${NC} Nextcloud Admin user"
-echo -e "${GREEN} - for accessing Nextcloud instance outside your local network:${NC} Domain name${GREEN}, optionally:${NC} Subdomain ${NC}"
-echo
-echo -e "${GREEN} ... ${NC}"
+echo -e "${GREEN} - Email Address for${NC} Certificate registration"
+echo -e "${GREEN} - Cloudflare${NC} API token"
+echo -e "${GREEN} - for external access:${NC} Domain name${GREEN}, optionally:${NC} Subdomain ${NC}"
 echo
 
 
@@ -1078,7 +1078,7 @@ echo
 echo -e " - $HOST_IP"
 echo -e " - $LOCAL_DOMAIN"
 echo
-echo -e "${GREEN} If you have configured external access, at: ${NC}"
+echo -e "${GREEN} If you have configured external access (NPM), at: ${NC}"
 echo
 echo -e " - $DOMAIN_INTERNET"
 echo -e " - www.$DOMAIN_INTERNET"
