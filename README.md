@@ -1,5 +1,5 @@
 <p align="left">
-  <a href="https://github.com/vdarkobar/Home-Cloud/tree/main?tab=readme-ov-file#nextcloud">Home</a>
+  <a href="https://github.com/vdarkobar/Home-Cloud/tree/main?tab=readme-ov-file#create-nextcloud">Home</a>
 </p>  
 
   
