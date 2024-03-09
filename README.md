@@ -23,7 +23,3 @@ chmod +x setup.sh && \
 rm README.md && \
 ./setup.sh
 ```
-
-
-<br><br>
-*(steps used to configure <a href="https://github.com/vdarkobar/unbound/blob/main/steps.md">Unbound</a>)*
