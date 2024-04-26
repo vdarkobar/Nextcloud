@@ -74,10 +74,11 @@ sleep 0.5 # delay for 0.5 seconds
 echo
 
 echo -e "${GREEN} Decide what you will use for: ${NC}"
-echo -e "${GREEN} - User name and Password for ${NC} Nextcloud Admin user"
-echo -e "${GREEN} - Email Address for${NC} Certificate registration"
-echo -e "${GREEN} - Cloudflare${NC} API token"
-echo -e "${GREEN} - for external access:${NC} Domain name${GREEN}, optionally:${NC} Subdomain ${NC}"
+echo -e " - Public Key to configure your SSH access to container"
+echo -e " - User name and Password for Nextcloud Admin user"
+echo -e " - Email Address for Certificate registration"
+echo -e " - Cloudflare API token"
+echo -e " - for external access: Domain name, optionally: Subdomain ${NC}"
 echo
 
 
@@ -122,22 +123,6 @@ done
 # Install Packages #
 ####################
 
-echo -e "${GREEN} Setting up PHP Repository...${NC}"
-
-# Add the GPG key for the Ondřej Surý PHP repository
-sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
-if [ $? -ne 0 ]; then
-    echo -e "${RED} Error downloading the GPG key for PHP repository. Exiting.${NC}"
-    exit 1
-fi
-
-# Add the PHP repository to the sources list
-sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
-if [ $? -ne 0 ]; then
-    echo -e "${RED} Error adding the PHP repository to sources list. Exiting.${NC}"
-    exit 1
-fi
-
 echo -e "${GREEN} Installing packages... ${NC}"
 
 sleep 0.5 # delay for 0.5 seconds
@@ -167,6 +152,28 @@ if ! sudo apt install -y \
     cloud-initramfs-growroot \
     software-properties-common; then
     echo -e "${RED} Failed to install packages. Exiting.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN} Setting up PHP Repository...${NC}"
+
+# Add the GPG key for the Ondřej Surý PHP repository
+sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
+if [ $? -ne 0 ]; then
+    echo -e "${RED} Error downloading the GPG key for PHP repository. Exiting.${NC}"
+    exit 1
+fi
+
+# Add the PHP repository to the sources list
+sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+if [ $? -ne 0 ]; then
+    echo -e "${RED} Error adding the PHP repository to sources list. Exiting.${NC}"
+    exit 1
+fi
+
+# Update the package repositories
+if ! sudo apt update; then
+    echo -e "${RED} Failed to update package repositories. Exiting.${NC}"
     exit 1
 fi
 
