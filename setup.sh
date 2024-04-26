@@ -516,7 +516,6 @@ fi
 
 # Ask the user for the public key
 while true; do
-    echo
     echo -e "${YELLOW} Please enter your public SSH key:${NC}"
     echo
     read public_key
@@ -685,7 +684,6 @@ echo
 # Secrets #
 ###########
 
-echo
 echo -e "${GREEN} Creating database passwords... ${NC}"
 sleep 0.5 # delay for 0.5 seconds
 
@@ -865,7 +863,6 @@ if ! sudo chmod 600 "$CREDENTIALS_FILE"; then
     exit 1
 fi
 
-echo
 sleep 0.5 # delay for 0.5 seconds
 echo -e "${GREEN} Cloudflare credentials file created and secured successfully.${NC}"
 echo
@@ -884,6 +881,7 @@ while true; do
     fi
 done
 
+sleep 0.5 # delay for 0.5 seconds
 echo
 
 
